@@ -52,8 +52,11 @@ Windows desktop runtime on the target machine — if it's missing, the generated
 - **Live markdown** — headings, bold, italic, strikethrough, inline code, highlights,
   links, images, blockquotes (nested), bullet and numbered lists, task checkboxes,
   horizontal rules, and fenced code blocks
-- **Tabs** with unsaved indicators, reopen-closed, and session restore
-- **Dark and light themes**, switched with `Ctrl+Shift+D`
+- **Tabs** with unsaved indicators, reopen-closed, and session restore — closing an
+  untitled tab compacts the remaining "Untitled N" numbers instead of counting up forever
+- **Dark and light themes**, switched with `Ctrl+Shift+D`, plus a full **Settings** window
+  (`Ctrl+,`) for customizing colours, per-level heading colours and underline, fonts,
+  reading-column margins, interface spacing, and a subtle grain texture — see below
 - **A centred reading column** that keeps line length comfortable on wide monitors
 - **Find** (`Ctrl+F`), **replace all** (`Ctrl+H`), **go to line** (`Ctrl+G`)
 - **Smart lists** — `Enter` continues a list, quote or task; `Enter` on an empty item ends it
@@ -90,15 +93,16 @@ characters are, which lets it stay line-local and cheap enough to run on every r
 ```
 src/Noted/
   Markdown/      line tokeniser and per-document cache
-  Rendering/     colorizer, element generator, decorations, themes
+  Rendering/     colorizer, element generator, decorations, themes, grain texture
   Editing/       list continuation, formatting toggles, line operations
   Models/        open document (text, path, encoding, dirty state)
   Services/      settings persisted to %APPDATA%\Noted\settings.json
+  Settings/      the tabbed Settings window
   Infrastructure/  small shared bits — prompt window, shortcut sheet
   Assets/        app icon and theme-adaptive title-bar mark
 tests/Noted.Tests/  scanner and analyzer coverage
 assets/          source logo/wordmark exports
-build/           installer sources and the build script
+build/           installer sources, make-ico.ps1, and the build script
 ```
 
 ## Tests
@@ -112,6 +116,16 @@ mistake would quietly render the wrong thing.
 
 ## Settings
 
-`%APPDATA%\Noted\settings.json`, or `Ctrl+,` to open the folder. Editable while the app is
-closed; useful keys are `FontFamily`, `MonospaceFontFamily`, `FontSize`, `ReadingWidth`,
-`Theme`, `WordWrap` and `LiveMarkdown`.
+`Ctrl+,` (or the menu's "Settings…") opens a tabbed window that edits everything live —
+no restart, no file to hand-edit:
+
+| Tab | Covers |
+| --- | --- |
+| Appearance | Dark/light theme, UI and monospace font, font size |
+| Colors | Hex overrides for background, surface, text, accent, links, code, quotes and rule lines — clear a field to fall back to the theme default |
+| Headings | Underline toggle, plus a colour override per level (h1..h6) |
+| Layout | Reading-column width and margins, and an interface-spacing multiplier for the title bar, tab strip and status bar |
+| Effects | The grain texture overlay |
+
+Everything is backed by `%APPDATA%\Noted\settings.json` (`Ctrl+Shift+,` opens the
+folder directly), so it's still just a JSON file if you'd rather script it.
