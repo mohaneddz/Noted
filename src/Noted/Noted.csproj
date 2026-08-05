@@ -15,10 +15,20 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationIcon>Assets\Noted.ico</ApplicationIcon>
+    <Company>Noted</Company>
+    <Description>A lightweight markdown notepad for Windows</Description>
+    <Copyright>Copyright © Noted</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\Noted.ico" />
+    <Resource Include="Assets\icon-dark.png" />
+    <Resource Include="Assets\icon-light.png" />
   </ItemGroup>
 
 </Project>

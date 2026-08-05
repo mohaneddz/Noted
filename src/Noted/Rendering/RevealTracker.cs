@@ -33,11 +33,26 @@ public sealed class RevealTracker
         Refresh(force: true);
     }
 
+    public int CaretLine => _caretLine;
+
     public bool IsRevealed(int lineNumber)
     {
         if (!Enabled) return true;
         if (lineNumber == _caretLine) return true;
         return lineNumber >= _selectionStartLine && lineNumber <= _selectionEndLine;
+    }
+
+    /// <summary>
+    /// Like <see cref="IsRevealed"/>, but for a whole block: true if the caret or selection
+    /// touches any line in <paramref name="startLine"/>..<paramref name="endLine"/>. Used for
+    /// code fences, where the whole block should pop back into view together.
+    /// </summary>
+    public bool IsRangeRevealed(int startLine, int endLine)
+    {
+        if (!Enabled) return true;
+        if (_caretLine >= startLine && _caretLine <= endLine) return true;
+        if (_selectionEndLine < _selectionStartLine || _selectionEndLine < 0) return false;
+        return _selectionStartLine <= endLine && _selectionEndLine >= startLine;
     }
 
     private void OnCaretChanged(object? sender, EventArgs e) => Refresh(force: false);

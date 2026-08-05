@@ -4,6 +4,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:avalon="http://icsharpcode.net/sharpdevelop/avalonedit"
         Title="Noted"
+        Icon="Assets/Noted.ico"
         Height="760" Width="1120" MinHeight="360" MinWidth="520"
         WindowStyle="None"
         AllowsTransparency="False"
@@ -42,10 +43,13 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0" Text="Noted"
-                           Margin="14,0,10,0" VerticalAlignment="Center"
-                           FontSize="12.5" FontWeight="SemiBold"
-                           Foreground="{DynamicResource Brush.Faint}" />
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="14,0,10,0" VerticalAlignment="Center">
+                    <Image x:Name="AppMark" Width="15" Height="15" Margin="0,0,7,0"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <TextBlock Text="Noted" VerticalAlignment="Center"
+                               FontSize="12.5" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Faint}" />
+                </StackPanel>
 
                 <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Disabled"
                               HorizontalScrollBarVisibility="Hidden"

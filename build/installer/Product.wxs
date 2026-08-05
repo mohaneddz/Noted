@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="Noted"
+           Manufacturer="Noted"
+           Version="1.0.0"
+           UpgradeCode="F55ACE21-0F05-48B6-A3CC-9486DAAEE1FB"
+           Language="1033"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="Noted installer" Manufacturer="Noted" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Noted is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="NotedIcon" SourceFile="..\..\src\Noted\Assets\Noted.ico" />
+    <Property Id="ARPPRODUCTICON" Value="NotedIcon" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Noted">
+
+        <Component Id="MainExecutable" Guid="E63638A9-A734-45E2-ABB0-D8C57AD52D93">
+          <File Id="NotedExe" Source="..\publish\Noted.exe" KeyPath="yes">
+            <Shortcut Id="StartMenuShortcut"
+                      Directory="ProgramMenuFolder"
+                      Name="Noted"
+                      Description="A lightweight markdown notepad"
+                      WorkingDirectory="INSTALLFOLDER"
+                      Icon="NotedIcon"
+                      Advertise="no" />
+            <Shortcut Id="DesktopShortcut"
+                      Directory="DesktopFolder"
+                      Name="Noted"
+                      Description="A lightweight markdown notepad"
+                      WorkingDirectory="INSTALLFOLDER"
+                      Icon="NotedIcon"
+                      Advertise="no" />
+          </File>
+        </Component>
+
+        <Component Id="NotedDll" Guid="135E954F-4322-435D-B241-4F269E07873B">
+          <File Source="..\publish\Noted.dll" KeyPath="yes" />
+        </Component>
+
+        <Component Id="DepsJson" Guid="66AC2053-03DE-443B-A154-3201F8328E0C">
+          <File Source="..\publish\Noted.deps.json" KeyPath="yes" />
+        </Component>
+
+        <Component Id="RuntimeConfigJson" Guid="37A5446B-CBCA-4F2F-972A-B677C2E53BCC">
+          <File Source="..\publish\Noted.runtimeconfig.json" KeyPath="yes" />
+        </Component>
+
+        <Component Id="AvalonEditDll" Guid="2E8EEA83-A63B-42A8-BDE8-3C3FF9781597">
+          <File Source="..\publish\ICSharpCode.AvalonEdit.dll" KeyPath="yes" />
+        </Component>
+
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="Noted" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="NotedDll" />
+      <ComponentRef Id="DepsJson" />
+      <ComponentRef Id="RuntimeConfigJson" />
+      <ComponentRef Id="AvalonEditDll" />
+    </Feature>
+
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    <ui:WixUI Id="WixUI_Minimal" />
+
+  </Package>
+</Wix>

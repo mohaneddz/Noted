@@ -34,14 +34,15 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
         var documentLine = visualLine.LastDocumentLine;
         int lineOffset = visualLine.FirstDocumentLine.Offset;
 
-        if (_reveal.IsRevealed(documentLine.LineNumber)) return -1;
+        int lineNumber = documentLine.LineNumber;
+        bool revealed = _reveal.IsRevealed(lineNumber);
 
-        var info = _analyzer.GetLine(documentLine.LineNumber);
+        var info = _analyzer.GetLine(lineNumber);
         foreach (var token in info.Tokens)
         {
             int absolute = lineOffset + token.Offset;
             if (absolute < startOffset) continue;
-            if (Classify(token, info) != Treatment.Keep) return absolute;
+            if (Classify(token, info, lineNumber, revealed) != Treatment.Keep) return absolute;
         }
 
         return -1;
@@ -52,13 +53,15 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
         var visualLine = CurrentContext.VisualLine;
         var documentLine = visualLine.LastDocumentLine;
         int lineOffset = visualLine.FirstDocumentLine.Offset;
+        int lineNumber = documentLine.LineNumber;
+        bool revealed = _reveal.IsRevealed(lineNumber);
 
-        var info = _analyzer.GetLine(documentLine.LineNumber);
+        var info = _analyzer.GetLine(lineNumber);
         foreach (var token in info.Tokens)
         {
             if (lineOffset + token.Offset != offset) continue;
 
-            return Classify(token, info) switch
+            return Classify(token, info, lineNumber, revealed) switch
             {
                 Treatment.Hide => new HiddenTextElement(token.Length),
                 Treatment.QuoteIndent => Glyph("  ", token.Length, Theme.Quote),
@@ -74,13 +77,28 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
 
     private enum Treatment { Keep, Hide, QuoteIndent, Bullet, TaskOpen, TaskDone }
 
-    private static Treatment Classify(MdToken token, MdLine info)
+    private Treatment Classify(MdToken token, MdLine info, int lineNumber, bool lineRevealed)
     {
         if (!token.IsMarker) return Treatment.Keep;
 
-        // Horizontal rules and code fences are drawn, not hidden — collapsing them
-        // would leave a zero-height line behind.
-        if ((token.Style & (MdStyle.Rule | MdStyle.CodeBlock)) != 0) return Treatment.Keep;
+        // Fence delimiters collapse together with the rest of their block, and pop back
+        // as a whole when the caret (or selection) touches any line inside it — the block
+        // reveals as a unit rather than one line at a time.
+        if ((token.Style & MdStyle.CodeBlock) != 0)
+        {
+            if (_analyzer.TryGetCodeBlock(lineNumber, out int start, out int end, out _) &&
+                _reveal.IsRangeRevealed(start, end))
+            {
+                return Treatment.Keep;
+            }
+            return Treatment.Hide;
+        }
+
+        if (lineRevealed) return Treatment.Keep;
+
+        // Horizontal rules are drawn, not hidden — collapsing one would leave a zero-height
+        // line behind.
+        if ((token.Style & MdStyle.Rule) != 0) return Treatment.Keep;
 
         // "> " shrinks to a blank indent rather than vanishing, leaving room for the quote bar.
         if ((token.Style & MdStyle.Quote) != 0)

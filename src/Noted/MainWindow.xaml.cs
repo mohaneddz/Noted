@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Search;
 using Microsoft.Win32;
@@ -50,7 +51,7 @@ public partial class MainWindow : Window
 
         _colorizer = new MarkdownColorizer(_analyzer, _reveal);
         _generator = new MarkdownElementGenerator(_analyzer, _reveal);
-        _decorations = new BlockDecorationRenderer(_analyzer);
+        _decorations = new BlockDecorationRenderer(_analyzer, _reveal);
 
         _statusTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -541,6 +542,19 @@ public partial class MainWindow : Window
         var document = Editor.Document;
         if (document is null) return;
 
+        // A caret crossing into or out of a fenced code block changes how the whole block
+        // looks (its fence lines, its language tag), not just the line the caret landed on.
+        if (_analyzer.TryGetCodeBlock(fromLine, out int s1, out int e1, out _))
+        {
+            fromLine = Math.Min(fromLine, s1);
+            toLine = Math.Max(toLine, e1);
+        }
+        if (_analyzer.TryGetCodeBlock(toLine, out int s2, out int e2, out _))
+        {
+            fromLine = Math.Min(fromLine, s2);
+            toLine = Math.Max(toLine, e2);
+        }
+
         var textView = Editor.TextArea.TextView;
         if (toLine - fromLine > 200)
         {
@@ -572,6 +586,13 @@ public partial class MainWindow : Window
         _generator.HideMarkers = _settings.LiveMarkdown;
         _reveal.Enabled = _settings.LiveMarkdown;
         _decorations.Theme = theme;
+        _decorations.MonospaceFont = new FontFamily(_settings.MonospaceFontFamily);
+        _decorations.HideMarkers = _settings.LiveMarkdown;
+
+        AppMark.Source = new BitmapImage(new Uri(
+            _settings.Theme == AppTheme.Dark
+                ? "pack://application:,,,/Assets/icon-light.png"
+                : "pack://application:,,,/Assets/icon-dark.png"));
 
         Editor.FontFamily = new FontFamily(_settings.FontFamily);
         Editor.FontSize = _settings.FontSize;

@@ -14,6 +14,10 @@ The document itself is never transformed — what you save is exactly what you t
 > quoted            →   ▏quoted
 ```
 
+Fenced code blocks work the same way one level up: the whole block — not just the current
+line — pops open when the caret is anywhere inside it. Step out, and the fence lines
+collapse while a small language tag floats in the top-right corner of the block.
+
 ## Running it
 
 ```bash
@@ -22,6 +26,26 @@ dotnet run --project src/Noted
 
 Requires the .NET 10 Windows desktop runtime. `Noted.exe path/to/file.md` opens a file
 directly, and files can be dropped onto the window.
+
+### Installer
+
+```powershell
+build\build-installer.ps1
+```
+
+Publishes the app and packages it into `build\Noted-Setup.msi` with
+[WiX](https://wixtoolset.org/) — Start Menu and Desktop shortcuts, an Add/Remove Programs
+entry, and the app icon throughout. One-time setup on a new machine:
+
+```powershell
+dotnet tool install --global wix
+wix eula accept wix7
+wix extension add WixToolset.UI.wixext --global
+```
+
+The installer is framework-dependent (not self-contained), so it needs the .NET 10
+Windows desktop runtime on the target machine — if it's missing, the generated
+`Noted.exe` shows the standard .NET "install the runtime" prompt on launch.
 
 ## What it does
 
@@ -51,8 +75,8 @@ three pieces layered on top:
 | [`MarkdownAnalyzer`](src/Noted/Markdown/MarkdownAnalyzer.cs) | Caches those results and tracks the one cross-line concern: fenced code blocks |
 | [`MarkdownColorizer`](src/Noted/Rendering/MarkdownColorizer.cs) | Applies fonts, weights and colours to the spans |
 | [`MarkdownElementGenerator`](src/Noted/Rendering/MarkdownElementGenerator.cs) | Collapses marker spans to zero width, and swaps `-` for `•` and `[x]` for `☑` |
-| [`BlockDecorationRenderer`](src/Noted/Rendering/BlockDecorationRenderer.cs) | Draws what isn't text: code panels, quote bars, rules |
-| [`RevealTracker`](src/Noted/Rendering/RevealTracker.cs) | Decides which lines show their syntax — the caret's line, plus any selection |
+| [`BlockDecorationRenderer`](src/Noted/Rendering/BlockDecorationRenderer.cs) | Draws what isn't text: code panels, quote bars, rules, language tags |
+| [`RevealTracker`](src/Noted/Rendering/RevealTracker.cs) | Decides what's revealed — a line's syntax by caret/selection, or a whole fenced block by range |
 
 Hiding is done with a zero-width `TextEmbeddedObject`
 ([`VisualElements.cs`](src/Noted/Rendering/VisualElements.cs)) rather than by editing text,
@@ -71,7 +95,10 @@ src/Noted/
   Models/        open document (text, path, encoding, dirty state)
   Services/      settings persisted to %APPDATA%\Noted\settings.json
   Infrastructure/  small shared bits — prompt window, shortcut sheet
+  Assets/        app icon and theme-adaptive title-bar mark
 tests/Noted.Tests/  scanner and analyzer coverage
+assets/          source logo/wordmark exports
+build/           installer sources and the build script
 ```
 
 ## Tests

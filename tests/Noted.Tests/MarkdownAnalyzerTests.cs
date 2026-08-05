@@ -84,4 +84,55 @@ public class MarkdownAnalyzerTests
         Assert.Empty(analyzer.GetLine(0).Tokens);
         Assert.Empty(analyzer.GetLine(99).Tokens);
     }
+
+    // ---------------- fence block ranges + language ----------------
+
+    [Fact]
+    public void CodeBlockRangeCoversFenceAndContent()
+    {
+        var analyzer = AnalyzerFor("before\n```csharp\nvar x = 1;\nvar y = 2;\n```\nafter");
+
+        for (int line = 2; line <= 5; line++)
+        {
+            Assert.True(analyzer.TryGetCodeBlock(line, out int start, out int end, out string language));
+            Assert.Equal(2, start);
+            Assert.Equal(5, end);
+            Assert.Equal("csharp", language);
+        }
+
+        Assert.False(analyzer.TryGetCodeBlock(1, out _, out _, out _));
+        Assert.False(analyzer.TryGetCodeBlock(6, out _, out _, out _));
+    }
+
+    [Fact]
+    public void LanguageIsEmptyWhenTheFenceHasNone()
+    {
+        var analyzer = AnalyzerFor("```\ncode\n```");
+
+        Assert.True(analyzer.TryGetCodeBlock(1, out _, out _, out string language));
+        Assert.Equal(string.Empty, language);
+    }
+
+    [Fact]
+    public void UnclosedFenceStillReportsARangeToEndOfDocument()
+    {
+        var analyzer = AnalyzerFor("```python\none\ntwo");
+
+        Assert.True(analyzer.TryGetCodeBlock(3, out int start, out int end, out string language));
+        Assert.Equal(1, start);
+        Assert.Equal(3, end);
+        Assert.Equal("python", language);
+    }
+
+    [Fact]
+    public void SeparateFencesAreSeparateBlocks()
+    {
+        var analyzer = AnalyzerFor("```a\none\n```\ntext\n```b\ntwo\n```");
+
+        Assert.True(analyzer.TryGetCodeBlock(2, out int start1, out int end1, out string lang1));
+        Assert.Equal((1, 3, "a"), (start1, end1, lang1));
+
+        Assert.True(analyzer.TryGetCodeBlock(7, out int start2, out int end2, out string lang2));
+        Assert.Equal((5, 7, "b"), (start2, end2, lang2));
+    }
 }

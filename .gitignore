@@ -2,3 +2,8 @@
 obj/
 .vs/
 *.user
+
+# Installer build output — regenerate with build/build-installer.ps1
+build/publish/
+build/*.msi
+build/*.wixpdb
