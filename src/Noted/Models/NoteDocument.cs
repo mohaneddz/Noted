@@ -68,6 +68,14 @@ public sealed class NoteDocument : INotifyPropertyChanged
 
     public static NoteDocument CreateEmpty() => new(string.Empty, null, new UTF8Encoding(false));
 
+    /// <summary>Creates an unsaved note that already has content, e.g. a reopened tab or a generated sheet.</summary>
+    public static NoteDocument CreateWithText(string text)
+    {
+        var note = new NoteDocument(text, null, new UTF8Encoding(false));
+        note.Document.UndoStack.ClearAll();
+        return note;
+    }
+
     public static NoteDocument Load(string path)
     {
         var bytes = File.ReadAllBytes(path);

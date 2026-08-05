@@ -179,6 +179,116 @@ public static partial class MarkdownEditing
         editor.TextArea.ClearSelection();
     }
 
+    /// <summary>Ticks or unticks the task box on the caret's line, adding one if the line is a plain list item.</summary>
+    public static void ToggleTask(TextEditor editor)
+    {
+        var document = editor.Document;
+        var line = document.GetLineByNumber(editor.TextArea.Caret.Line);
+        string text = document.GetText(line);
+
+        var match = ListPrefixRegex.Match(text);
+        if (!match.Groups["bullet"].Success && !match.Groups["number"].Success) return;
+
+        var task = match.Groups["task"];
+        if (task.Success)
+        {
+            bool done = task.Value.Contains('x') || task.Value.Contains('X');
+            document.Replace(line.Offset + task.Index, 3, done ? "[ ]" : "[x]");
+        }
+        else
+        {
+            int insertAt = match.Groups["number"].Success
+                ? match.Groups["number"].Index + match.Groups["number"].Length + 1
+                : match.Groups["bullet"].Index + 1;
+            while (insertAt < text.Length && (text[insertAt] == ' ' || text[insertAt] == '\t')) insertAt++;
+            document.Insert(line.Offset + insertAt, "[ ] ");
+        }
+    }
+
+    public static void DuplicateLine(TextEditor editor)
+    {
+        var document = editor.Document;
+        var line = document.GetLineByNumber(editor.TextArea.Caret.Line);
+        string text = document.GetText(line);
+
+        int column = editor.CaretOffset - line.Offset;
+        document.Insert(line.EndOffset, Environment.NewLine + text);
+        editor.CaretOffset = Math.Min(document.TextLength, line.EndOffset + Environment.NewLine.Length + column);
+    }
+
+    public static void DeleteLine(TextEditor editor)
+    {
+        var document = editor.Document;
+        var line = document.GetLineByNumber(editor.TextArea.Caret.Line);
+        document.Remove(line.Offset, line.TotalLength > 0 ? line.TotalLength : line.Length);
+    }
+
+    /// <summary>Swaps the caret's line with the one above (-1) or below (+1), keeping the caret on it.</summary>
+    public static void MoveLine(TextEditor editor, int direction)
+    {
+        var document = editor.Document;
+        int number = editor.TextArea.Caret.Line;
+        int target = number + direction;
+        if (target < 1 || target > document.LineCount) return;
+
+        var line = document.GetLineByNumber(number);
+        var other = document.GetLineByNumber(target);
+        int column = editor.CaretOffset - line.Offset;
+
+        string lineText = document.GetText(line);
+        string otherText = document.GetText(other);
+
+        using (document.RunUpdate())
+        {
+            if (direction < 0)
+            {
+                document.Replace(other.Offset, other.Length, lineText);
+                document.Replace(
+                    document.GetLineByNumber(number).Offset,
+                    document.GetLineByNumber(number).Length,
+                    otherText);
+            }
+            else
+            {
+                document.Replace(line.Offset, line.Length, otherText);
+                document.Replace(
+                    document.GetLineByNumber(target).Offset,
+                    document.GetLineByNumber(target).Length,
+                    lineText);
+            }
+        }
+
+        var moved = document.GetLineByNumber(target);
+        editor.CaretOffset = Math.Min(moved.Offset + column, moved.EndOffset);
+    }
+
+    /// <summary>Opens an empty fenced code block below the caret and puts the caret inside it.</summary>
+    public static void InsertCodeFence(TextEditor editor)
+    {
+        string newLine = Environment.NewLine;
+        InsertBlock(editor, $"```{newLine}{newLine}```", caretOffsetIntoBlock: 3 + newLine.Length);
+    }
+
+    public static void InsertRule(TextEditor editor)
+    {
+        string newLine = Environment.NewLine;
+        InsertBlock(editor, $"---{newLine}", caretOffsetIntoBlock: 3 + newLine.Length);
+    }
+
+    /// <summary>Inserts a block on its own lines, leaving the caret where the user will keep typing.</summary>
+    private static void InsertBlock(TextEditor editor, string block, int caretOffsetIntoBlock)
+    {
+        var document = editor.Document;
+        var line = document.GetLineByNumber(editor.TextArea.Caret.Line);
+
+        string prefix = line.Length == 0 ? string.Empty : Environment.NewLine;
+        int offset = line.EndOffset;
+
+        document.Insert(offset, prefix + block);
+        editor.TextArea.ClearSelection();
+        editor.CaretOffset = Math.Min(document.TextLength, offset + prefix.Length + caretOffsetIntoBlock);
+    }
+
     private static (int Start, int Length) GetTargetSegment(TextEditor editor)
     {
         var selection = editor.TextArea.Selection;

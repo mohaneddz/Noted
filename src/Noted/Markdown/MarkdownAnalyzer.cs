@@ -41,8 +41,13 @@ public sealed class MarkdownAnalyzer
         return _cache[lineNumber] ??= ScanLine(lineNumber);
     }
 
-    public bool IsInsideCodeBlock(int lineNumber) =>
-        lineNumber >= 1 && lineNumber < _fences.Length && _fences[lineNumber] != Fence.None;
+    public bool IsInsideCodeBlock(int lineNumber)
+    {
+        if (_document is null) return false;
+
+        EnsureFresh();
+        return lineNumber >= 1 && lineNumber < _fences.Length && _fences[lineNumber] != Fence.None;
+    }
 
     private MdLine ScanLine(int lineNumber)
     {

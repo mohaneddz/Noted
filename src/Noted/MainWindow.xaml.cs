@@ -31,9 +31,16 @@ public partial class MainWindow : Window
     private readonly BlockDecorationRenderer _decorations;
     private readonly DispatcherTimer _statusTimer;
     private readonly AppSettings _settings;
+    private readonly Stack<ClosedDocument> _closed = new();
 
+    private SearchPanel? _searchPanel;
+    private NoteDocument? _shortcutSheet;
     private NoteDocument? _active;
     private bool _switchingTabs;
+    private bool _fullScreen;
+    private WindowState _preFullScreenState = WindowState.Normal;
+
+    private readonly record struct ClosedDocument(string? FilePath, string Text);
 
     public MainWindow(IReadOnlyList<string> arguments)
     {
@@ -91,8 +98,8 @@ public partial class MainWindow : Window
         Editor.PreviewKeyDown += OnEditorPreviewKeyDown;
         Editor.PreviewMouseWheel += OnEditorPreviewMouseWheel;
 
-        var searchPanel = SearchPanel.Install(Editor);
-        searchPanel.MarkerBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xF5, 0xC2, 0x42));
+        _searchPanel = SearchPanel.Install(Editor);
+        _searchPanel.MarkerBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xF5, 0xC2, 0x42));
 
         Drop += OnFilesDropped;
         DragOver += (_, e) =>
@@ -104,37 +111,78 @@ public partial class MainWindow : Window
 
     private void BuildInputBindings()
     {
-        Bind(Key.N, ModifierKeys.Control, NewDocument);
-        Bind(Key.O, ModifierKeys.Control, OpenDocuments);
-        Bind(Key.S, ModifierKeys.Control, () => SaveDocument(_active, saveAs: false));
-        Bind(Key.S, ModifierKeys.Control | ModifierKeys.Shift, () => SaveDocument(_active, saveAs: true));
-        Bind(Key.W, ModifierKeys.Control, () => CloseDocument(_active));
-        Bind(Key.D, ModifierKeys.Control, ToggleTheme);
-        Bind(Key.Tab, ModifierKeys.Control, () => CycleTab(1));
-        Bind(Key.Tab, ModifierKeys.Control | ModifierKeys.Shift, () => CycleTab(-1));
+        const ModifierKeys ctrl = ModifierKeys.Control;
+        const ModifierKeys ctrlShift = ModifierKeys.Control | ModifierKeys.Shift;
+        const ModifierKeys ctrlAlt = ModifierKeys.Control | ModifierKeys.Alt;
 
-        Bind(Key.B, ModifierKeys.Control, () => MarkdownEditing.ToggleInline(Editor, "**"));
-        Bind(Key.I, ModifierKeys.Control, () => MarkdownEditing.ToggleInline(Editor, "*"));
-        Bind(Key.E, ModifierKeys.Control, () => MarkdownEditing.ToggleInline(Editor, "`"));
-        Bind(Key.H, ModifierKeys.Control | ModifierKeys.Shift, () => MarkdownEditing.ToggleInline(Editor, "=="));
-        Bind(Key.X, ModifierKeys.Control | ModifierKeys.Shift, () => MarkdownEditing.ToggleInline(Editor, "~~"));
-        Bind(Key.K, ModifierKeys.Control, () => MarkdownEditing.InsertLink(Editor));
-        Bind(Key.Q, ModifierKeys.Control | ModifierKeys.Shift, () => MarkdownEditing.ToggleLinePrefix(Editor, "> "));
-        Bind(Key.L, ModifierKeys.Control | ModifierKeys.Shift, () => MarkdownEditing.ToggleLinePrefix(Editor, "- "));
+        // ---- files and tabs ----
+        Bind(Key.N, ctrl, NewDocument);
+        Bind(Key.T, ctrl, NewDocument);
+        Bind(Key.T, ctrlShift, ReopenClosedDocument);
+        Bind(Key.O, ctrl, OpenDocuments);
+        Bind(Key.S, ctrl, () => SaveDocument(_active, saveAs: false));
+        Bind(Key.S, ctrlShift, () => SaveDocument(_active, saveAs: true));
+        Bind(Key.S, ctrlAlt, SaveAllDocuments);
+        Bind(Key.W, ctrl, () => CloseDocument(_active));
+        Bind(Key.F4, ctrl, () => CloseDocument(_active));
+        Bind(Key.W, ctrlShift, Close);
+        Bind(Key.Tab, ctrl, () => CycleTab(1));
+        Bind(Key.Tab, ctrlShift, () => CycleTab(-1));
+        Bind(Key.PageDown, ctrl, () => CycleTab(1));
+        Bind(Key.PageUp, ctrl, () => CycleTab(-1));
+        for (int slot = 1; slot <= 8; slot++)
+        {
+            int index = slot - 1;
+            Bind(Key.D0 + slot, ctrl, () => SelectTab(index));
+        }
+        Bind(Key.D9, ctrl, () => SelectTab(_documents.Count - 1));
+
+        // ---- search and navigation ----
+        Bind(Key.F, ctrl, () => OpenSearchPanel(replace: false));
+        Bind(Key.H, ctrl, () => OpenSearchPanel(replace: true));
+        Bind(Key.G, ctrl, GoToLine);
+
+        // ---- inline formatting ----
+        Bind(Key.B, ctrl, () => MarkdownEditing.ToggleInline(Editor, "**"));
+        Bind(Key.I, ctrl, () => MarkdownEditing.ToggleInline(Editor, "*"));
+        Bind(Key.E, ctrl, () => MarkdownEditing.ToggleInline(Editor, "`"));
+        Bind(Key.H, ctrlShift, () => MarkdownEditing.ToggleInline(Editor, "=="));
+        Bind(Key.X, ctrlShift, () => MarkdownEditing.ToggleInline(Editor, "~~"));
+        Bind(Key.K, ctrl, () => MarkdownEditing.InsertLink(Editor));
+
+        // ---- block formatting ----
+        Bind(Key.Q, ctrlShift, () => MarkdownEditing.ToggleLinePrefix(Editor, "> "));
+        Bind(Key.L, ctrlShift, () => MarkdownEditing.ToggleLinePrefix(Editor, "- "));
+        Bind(Key.O, ctrlShift, () => MarkdownEditing.ToggleLinePrefix(Editor, "1. "));
+        Bind(Key.C, ctrlShift, () => MarkdownEditing.ToggleTask(Editor));
+        Bind(Key.M, ctrlShift, () => MarkdownEditing.InsertCodeFence(Editor));
+        Bind(Key.R, ctrlShift, () => MarkdownEditing.InsertRule(Editor));
 
         for (int level = 1; level <= 6; level++)
         {
             int captured = level;
-            Bind(Key.D0 + level, ModifierKeys.Control | ModifierKeys.Alt,
-                () => MarkdownEditing.SetHeadingLevel(Editor, captured));
+            Bind(Key.D0 + level, ctrlAlt, () => MarkdownEditing.SetHeadingLevel(Editor, captured));
         }
-        Bind(Key.D0, ModifierKeys.Control | ModifierKeys.Alt, () => MarkdownEditing.SetHeadingLevel(Editor, 0));
+        Bind(Key.D0, ctrlAlt, () => MarkdownEditing.SetHeadingLevel(Editor, 0));
 
-        Bind(Key.OemPlus, ModifierKeys.Control, () => Zoom(1));
-        Bind(Key.Add, ModifierKeys.Control, () => Zoom(1));
-        Bind(Key.OemMinus, ModifierKeys.Control, () => Zoom(-1));
-        Bind(Key.Subtract, ModifierKeys.Control, () => Zoom(-1));
-        Bind(Key.D0, ModifierKeys.Control, () => SetFontSize(15.5));
+        // ---- line surgery ----
+        Bind(Key.D, ctrl, () => MarkdownEditing.DuplicateLine(Editor));
+        Bind(Key.K, ctrlShift, () => MarkdownEditing.DeleteLine(Editor));
+        Bind(Key.Up, ModifierKeys.Alt, () => MarkdownEditing.MoveLine(Editor, -1));
+        Bind(Key.Down, ModifierKeys.Alt, () => MarkdownEditing.MoveLine(Editor, 1));
+
+        // ---- view ----
+        Bind(Key.D, ctrlShift, ToggleTheme);
+        Bind(Key.F11, ModifierKeys.None, ToggleFullScreen);
+        Bind(Key.OemPlus, ctrl, () => Zoom(1));
+        Bind(Key.Add, ctrl, () => Zoom(1));
+        Bind(Key.OemMinus, ctrl, () => Zoom(-1));
+        Bind(Key.Subtract, ctrl, () => Zoom(-1));
+        Bind(Key.D0, ctrl, () => SetFontSize(AppSettings.DefaultFontSize));
+        Bind(Key.NumPad0, ctrl, () => SetFontSize(AppSettings.DefaultFontSize));
+        Bind(Key.P, ctrlShift, ToggleLiveMarkdown);
+        Bind(Key.OemComma, ctrl, OpenSettingsFolder);
+        Bind(Key.F1, ModifierKeys.None, ShowShortcutSheet);
 
         void Bind(Key key, ModifierKeys modifiers, Action action) =>
             InputBindings.Add(new KeyBinding(new RelayCommand(action), key, modifiers));
@@ -236,10 +284,21 @@ public partial class MainWindow : Window
         return true;
     }
 
+    private void SaveAllDocuments()
+    {
+        foreach (var note in _documents.Where(d => d.IsModified).ToList())
+        {
+            if (!SaveDocument(note, saveAs: false)) return;
+        }
+    }
+
     private void CloseDocument(NoteDocument? note)
     {
         if (note is null) return;
         if (!ConfirmClose(note)) return;
+
+        if (note.FilePath is not null || note.Document.TextLength > 0)
+            _closed.Push(new ClosedDocument(note.FilePath, note.Document.Text));
 
         int index = _documents.IndexOf(note);
         _documents.Remove(note);
@@ -303,11 +362,151 @@ public partial class MainWindow : Window
         Title = note is null ? "Noted" : $"{note.Title} — Noted";
     }
 
+    private void ReopenClosedDocument()
+    {
+        while (_closed.Count > 0)
+        {
+            var entry = _closed.Pop();
+
+            if (entry.FilePath is not null && File.Exists(entry.FilePath))
+            {
+                OpenPath(entry.FilePath, focus: true);
+                return;
+            }
+
+            if (entry.FilePath is null)
+            {
+                var note = NoteDocument.CreateWithText(entry.Text);
+                _documents.Add(note);
+                TabList.SelectedItem = note;
+                Editor.Focus();
+                return;
+            }
+        }
+    }
+
     private void CycleTab(int delta)
     {
         if (_documents.Count < 2) return;
         int index = (TabList.SelectedIndex + delta + _documents.Count) % _documents.Count;
         TabList.SelectedIndex = index;
+    }
+
+    private void SelectTab(int index)
+    {
+        if (index >= 0 && index < _documents.Count) TabList.SelectedIndex = index;
+    }
+
+    private void OpenSearchPanel(bool replace)
+    {
+        if (replace)
+        {
+            ReplaceAll();
+            return;
+        }
+
+        _searchPanel ??= SearchPanel.Install(Editor);
+        if (!Editor.TextArea.Selection.IsEmpty)
+            _searchPanel.SearchPattern = Editor.TextArea.Selection.GetText();
+
+        _searchPanel.Open();
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => _searchPanel.Reactivate());
+    }
+
+    /// <summary>
+    /// AvalonEdit's search panel is find-only, so replace is its own prompt: it swaps every
+    /// occurrence in one undoable step and reports how many it touched.
+    /// </summary>
+    private void ReplaceAll()
+    {
+        var document = Editor.Document;
+        if (document is null) return;
+
+        string initial = Editor.TextArea.Selection.IsEmpty
+            ? string.Empty
+            : Editor.TextArea.Selection.GetText();
+
+        var answer = PromptWindow.AskPair(this, "Replace all", "Replace with", initial);
+        if (answer is not { } pair || pair.First.Length == 0) return;
+
+        // Collect against one snapshot, then rewrite back-to-front so earlier offsets stay valid.
+        string text = document.Text;
+        var offsets = new List<int>();
+        for (int i = text.IndexOf(pair.First, StringComparison.Ordinal);
+             i >= 0;
+             i = text.IndexOf(pair.First, i + pair.First.Length, StringComparison.Ordinal))
+        {
+            offsets.Add(i);
+        }
+
+        using (document.RunUpdate())
+        {
+            for (int i = offsets.Count - 1; i >= 0; i--)
+                document.Replace(offsets[i], pair.First.Length, pair.Second);
+        }
+
+        StatusPath.Text = offsets.Count == 0
+            ? $"No matches for “{pair.First}”"
+            : $"Replaced {offsets.Count:N0} occurrence{(offsets.Count == 1 ? "" : "s")}";
+    }
+
+    private void GoToLine()
+    {
+        if (Editor.Document is null) return;
+
+        string? answer = PromptWindow.Ask(
+            this,
+            $"Go to line (1–{Editor.Document.LineCount})",
+            Editor.TextArea.Caret.Line.ToString());
+
+        if (!int.TryParse(answer, out int line)) return;
+
+        line = Math.Clamp(line, 1, Editor.Document.LineCount);
+        Editor.CaretOffset = Editor.Document.GetLineByNumber(line).Offset;
+        Editor.ScrollToLine(line);
+        Editor.Focus();
+    }
+
+    private void ToggleFullScreen()
+    {
+        _fullScreen = !_fullScreen;
+
+        if (_fullScreen)
+        {
+            _preFullScreenState = WindowState;
+            WindowState = WindowState.Maximized;
+        }
+        else
+        {
+            WindowState = _preFullScreenState;
+        }
+
+        TitleBar.Visibility = _fullScreen ? Visibility.Collapsed : Visibility.Visible;
+        StatusBar.Visibility = _fullScreen ? Visibility.Collapsed : Visibility.Visible;
+        UpdateMaximizeState();
+    }
+
+    private void ToggleLiveMarkdown()
+    {
+        _settings.LiveMarkdown = !_settings.LiveMarkdown;
+        ApplySettingsToEditor();
+        Editor.TextArea.TextView.Redraw();
+    }
+
+    /// <summary>Opens the shortcut reference as a note — it is markdown, so the editor renders it.</summary>
+    private void ShowShortcutSheet()
+    {
+        if (_shortcutSheet is not null && _documents.Contains(_shortcutSheet))
+        {
+            TabList.SelectedItem = _shortcutSheet;
+            return;
+        }
+
+        var note = NoteDocument.CreateWithText(ShortcutSheet.Markdown);
+        _shortcutSheet = note;
+        _documents.Add(note);
+        TabList.SelectedItem = note;
+        Editor.Focus();
     }
 
     // ================= editor behaviour =================
@@ -497,12 +696,16 @@ public partial class MainWindow : Window
 
         Add("New note", "Ctrl+N", NewDocument);
         Add("Open…", "Ctrl+O", OpenDocuments);
+        Add("Reopen closed note", "Ctrl+Shift+T", ReopenClosedDocument);
         Add("Save", "Ctrl+S", () => SaveDocument(_active, saveAs: false));
         Add("Save as…", "Ctrl+Shift+S", () => SaveDocument(_active, saveAs: true));
+        Add("Save all", "Ctrl+Alt+S", SaveAllDocuments);
         Add("Close note", "Ctrl+W", () => CloseDocument(_active));
         Separator();
 
-        Add("Find / replace", "Ctrl+F", () => SearchPanel.Install(Editor).Open());
+        Add("Find…", "Ctrl+F", () => OpenSearchPanel(replace: false));
+        Add("Replace…", "Ctrl+H", () => OpenSearchPanel(replace: true));
+        Add("Go to line…", "Ctrl+G", GoToLine);
         Separator();
 
         Add("Bold", "Ctrl+B", () => MarkdownEditing.ToggleInline(Editor, "**"));
@@ -510,21 +713,20 @@ public partial class MainWindow : Window
         Add("Inline code", "Ctrl+E", () => MarkdownEditing.ToggleInline(Editor, "`"));
         Add("Highlight", "Ctrl+Shift+H", () => MarkdownEditing.ToggleInline(Editor, "=="));
         Add("Link", "Ctrl+K", () => MarkdownEditing.InsertLink(Editor));
+        Add("Task checkbox", "Ctrl+Shift+C", () => MarkdownEditing.ToggleTask(Editor));
+        Add("Code block", "Ctrl+Shift+M", () => MarkdownEditing.InsertCodeFence(Editor));
         Separator();
 
-        Toggle("Live markdown", _settings.LiveMarkdown, value =>
-        {
-            _settings.LiveMarkdown = value;
-            ApplySettingsToEditor();
-            Editor.TextArea.TextView.Redraw();
-        });
+        Toggle("Live markdown", _settings.LiveMarkdown, _ => ToggleLiveMarkdown());
         Toggle("Word wrap", _settings.WordWrap, value => { _settings.WordWrap = value; ApplySettingsToEditor(); });
         Toggle("Line numbers", _settings.ShowLineNumbers,
             value => { _settings.ShowLineNumbers = value; ApplySettingsToEditor(); });
         Toggle("Light theme", _settings.Theme == AppTheme.Light, _ => ToggleTheme());
+        Toggle("Full screen", _fullScreen, _ => ToggleFullScreen());
         Separator();
 
-        Add("Settings file…", null, OpenSettingsFolder);
+        Add("Keyboard shortcuts", "F1", ShowShortcutSheet);
+        Add("Settings file…", "Ctrl+,", OpenSettingsFolder);
 
         return menu;
 

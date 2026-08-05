@@ -14,13 +14,15 @@ public sealed class AppSettings
         Converters = { new JsonStringEnumConverter() },
     };
 
+    public const double DefaultFontSize = 15.5;
+
     public AppTheme Theme { get; set; } = AppTheme.Dark;
 
     public string FontFamily { get; set; } = "Segoe UI Variable Text, Segoe UI";
 
     public string MonospaceFontFamily { get; set; } = "Cascadia Mono, Consolas, Courier New";
 
-    public double FontSize { get; set; } = 15.5;
+    public double FontSize { get; set; } = DefaultFontSize;
 
     public bool WordWrap { get; set; } = true;
 
