@@ -89,7 +89,8 @@ public sealed class EditorTheme
 
     private static EditorTheme Freeze(EditorTheme theme)
     {
-        foreach (var property in typeof(EditorTheme).GetProperties())
+        foreach (var property in typeof(EditorTheme).GetProperties(
+                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
         {
             if (property.GetValue(theme) is Freezable { CanFreeze: true } freezable) freezable.Freeze();
         }

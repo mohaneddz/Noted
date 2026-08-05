@@ -20,6 +20,7 @@ public partial class App : Application
 
         DispatcherUnhandledException += (_, args) =>
         {
+            LogCrash(args.Exception);
             MessageBox.Show(
                 args.Exception.Message,
                 "Noted ran into a problem",
@@ -48,5 +49,20 @@ public partial class App : Application
         Set("Brush.Accent", theme.Accent);
 
         void Set(string key, Brush brush) => Resources[key] = brush;
+    }
+
+    /// <summary>Appends a crash to <c>%APPDATA%\Noted\crash.log</c> so failures can be diagnosed after the fact.</summary>
+    private static void LogCrash(Exception exception)
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(AppSettings.DirectoryPath);
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(AppSettings.DirectoryPath, "crash.log"),
+                $"{DateTimeOffset.Now:u}{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+        }
     }
 }

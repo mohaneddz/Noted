@@ -60,7 +60,7 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
 
             return Classify(token, info) switch
             {
-                Treatment.Hide => new FormattedTextElement(string.Empty, token.Length),
+                Treatment.Hide => new HiddenTextElement(token.Length),
                 Treatment.QuoteIndent => Glyph("  ", token.Length, Theme.Quote),
                 Treatment.Bullet => Glyph("•", token.Length, Theme.Accent),
                 Treatment.TaskOpen => Glyph("☐ ", token.Length, Theme.Muted),
@@ -111,6 +111,6 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
             brush,
             dpi);
 
-        return new FormattedTextElement(text, documentLength);
+        return new GlyphTextElement(text, documentLength);
     }
 }

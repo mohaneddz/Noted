@@ -20,6 +20,12 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
 
     public EditorTheme Theme { get; set; } = EditorTheme.Dark;
 
+    /// <summary>
+    /// Width of the reading column. Panels and rules stop here rather than running to the
+    /// window edge, which the text view's own width would do.
+    /// </summary>
+    public double ContentWidth { get; set; }
+
     public KnownLayer Layer => KnownLayer.Background;
 
     public void Draw(TextView textView, DrawingContext drawingContext)
@@ -29,7 +35,7 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
         textView.EnsureVisualLines();
         if (textView.VisualLines.Count == 0) return;
 
-        double right = textView.ActualWidth;
+        double right = ContentWidth > 0 ? Math.Min(ContentWidth, textView.ActualWidth) : textView.ActualWidth;
         var rulePen = new Pen(Theme.RuleLine, 1.4);
         rulePen.Freeze();
 

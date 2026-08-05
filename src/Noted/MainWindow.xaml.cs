@@ -406,6 +406,9 @@ public partial class MainWindow : Window
 
         double side = Math.Max(28, (available - _settings.ReadingWidth) / 2);
         Editor.Padding = new Thickness(side, 20, side * 0.6, 60);
+
+        _decorations.ContentWidth = Math.Max(120, available - side * 1.6);
+        Editor.TextArea.TextView.InvalidateLayer(ICSharpCode.AvalonEdit.Rendering.KnownLayer.Background);
     }
 
     // ================= status bar =================
