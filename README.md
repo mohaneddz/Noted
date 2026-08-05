@@ -35,13 +35,12 @@ build\build-installer.ps1
 
 Publishes the app and packages it into `build\Noted-Setup.msi` with
 [WiX](https://wixtoolset.org/) — Start Menu and Desktop shortcuts, an Add/Remove Programs
-entry, and the app icon throughout. One-time setup on a new machine:
+entry, and the app icon throughout. On a new machine the script installs the WiX CLI
+itself (as a global dotnet tool) the first time it's run.
 
-```powershell
-dotnet tool install --global wix
-wix eula accept wix7
-wix extension add WixToolset.UI.wixext --global
-```
+Installing the MSI over an existing install automatically removes the previous version
+first (via the installer's `MajorUpgrade` rule), so re-running the installer is how you
+update Noted — no manual uninstall step needed.
 
 The installer is framework-dependent (not self-contained), so it needs the .NET 10
 Windows desktop runtime on the target machine — if it's missing, the generated
