@@ -9,8 +9,6 @@ namespace Noted.Models;
 /// <summary>One open tab: its text, where it came from, and whether it still matches disk.</summary>
 public sealed class NoteDocument : INotifyPropertyChanged
 {
-    private static int _untitledCounter;
-
     private string? _filePath;
     private bool _isModified;
 
@@ -21,14 +19,23 @@ public sealed class NoteDocument : INotifyPropertyChanged
         Document.TextChanged += (_, _) => IsModified = true;
         _filePath = filePath;
         Encoding = encoding;
-        UntitledNumber = filePath is null ? ++_untitledCounter : 0;
     }
 
     public TextDocument Document { get; }
 
     public Encoding Encoding { get; set; }
 
-    public int UntitledNumber { get; }
+    public int UntitledNumber { get; private set; }
+
+    /// <summary>Assigns this tab's slot in the compact "Untitled N" sequence; called whenever the open-tab set changes.</summary>
+    public void SetUntitledNumber(int number)
+    {
+        if (UntitledNumber == number) return;
+        UntitledNumber = number;
+        Raise(nameof(UntitledNumber));
+        Raise(nameof(Title));
+        Raise(nameof(ToolTip));
+    }
 
     public int CaretOffset { get; set; }
 

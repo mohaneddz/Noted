@@ -206,8 +206,20 @@ public partial class MainWindow : Window
     {
         var note = NoteDocument.CreateEmpty();
         _documents.Add(note);
+        RenumberUntitledDocuments();
         TabList.SelectedItem = note;
         Editor.Focus();
+    }
+
+    /// <summary>Keeps "Untitled N" compact: closing Untitled 2 relabels Untitled 3 down to 2, and the
+    /// next new tab reuses the smallest free slot instead of a counter that only ever grows.</summary>
+    private void RenumberUntitledDocuments()
+    {
+        int number = 1;
+        foreach (var doc in _documents)
+        {
+            if (doc.FilePath is null) doc.SetUntitledNumber(number++);
+        }
     }
 
     private void OpenDocuments()
@@ -249,6 +261,7 @@ public partial class MainWindow : Window
         }
 
         _documents.Add(note);
+        RenumberUntitledDocuments();
         if (focus) TabList.SelectedItem = note;
     }
 
@@ -281,6 +294,7 @@ public partial class MainWindow : Window
             return false;
         }
 
+        RenumberUntitledDocuments();
         UpdateStatusBar();
         return true;
     }
@@ -303,6 +317,7 @@ public partial class MainWindow : Window
 
         int index = _documents.IndexOf(note);
         _documents.Remove(note);
+        RenumberUntitledDocuments();
 
         if (_documents.Count == 0)
         {
@@ -379,6 +394,7 @@ public partial class MainWindow : Window
             {
                 var note = NoteDocument.CreateWithText(entry.Text);
                 _documents.Add(note);
+                RenumberUntitledDocuments();
                 TabList.SelectedItem = note;
                 Editor.Focus();
                 return;
@@ -506,6 +522,7 @@ public partial class MainWindow : Window
         var note = NoteDocument.CreateWithText(ShortcutSheet.Markdown);
         _shortcutSheet = note;
         _documents.Add(note);
+        RenumberUntitledDocuments();
         TabList.SelectedItem = note;
         Editor.Focus();
     }
