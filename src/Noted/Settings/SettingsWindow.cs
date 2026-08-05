@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shell;
 using Noted.Rendering;
 using Noted.Services;
 
@@ -27,85 +28,130 @@ public sealed class SettingsWindow : Window
 
         Owner = owner;
         Title = "Settings";
-        Width = 640;
-        Height = 640;
-        MinWidth = 520;
-        MinHeight = 420;
+        Width = 760;
+        Height = 620;
+        MinWidth = 640;
+        MinHeight = 440;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        WindowStyle = WindowStyle.ToolWindow;
+        WindowStyle = WindowStyle.None;
+        AllowsTransparency = false;
         ShowInTaskbar = false;
         Background = Brush("Brush.Background", Brushes.Black);
         Foreground = Brush("Brush.Text", Brushes.White);
         FontFamily = Application.Current.TryFindResource("Font.Ui") as FontFamily ?? new FontFamily("Segoe UI");
 
+        WindowChrome.SetWindowChrome(this, new WindowChrome
+        {
+            CaptionHeight = 0,
+            ResizeBorderThickness = new Thickness(6),
+            GlassFrameThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(0),
+            UseAeroCaptionButtons = false,
+        });
+
+        var outer = new Border
+        {
+            Background = Brush("Brush.Background", Brushes.Black),
+            BorderBrush = Brush("Brush.Border", Brushes.Gray),
+            BorderThickness = new Thickness(1),
+        };
+
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        outer.Child = root;
 
-        var header = new StackPanel
+        var titleBar = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(16, 14, 16, 6),
+            Height = 40,
+            Background = Brush("Brush.Surface", Brushes.DarkGray),
         };
-        Grid.SetRow(header, 0);
-        root.Children.Add(header);
+        titleBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        titleBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        titleBar.MouseLeftButtonDown += (_, e) => { if (e.ChangedButton == MouseButton.Left) DragMove(); };
 
-        var contentHost = new Grid { Margin = new Thickness(4, 0, 4, 0) };
-        Grid.SetRow(contentHost, 1);
-        root.Children.Add(contentHost);
-
-        var footer = new StackPanel
+        var titleText = new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 8, 16, 16),
+            Text = "Settings",
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brush("Brush.Text", Brushes.White),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(16, 0, 0, 0),
         };
-        Grid.SetRow(footer, 2);
-        var close = new Button
-        {
-            Content = "Close",
-            Style = (Style)FindResource("SettingsAccentButton"),
-            IsDefault = true,
-        };
-        close.Click += (_, _) => Close();
-        footer.Children.Add(close);
-        root.Children.Add(footer);
+        Grid.SetColumn(titleText, 0);
+        titleBar.Children.Add(titleText);
 
-        AddTab(header, contentHost, "Appearance", BuildAppearanceTab());
-        AddTab(header, contentHost, "Colors", BuildColorsTab());
-        AddTab(header, contentHost, "Headings", BuildHeadingsTab());
-        AddTab(header, contentHost, "Layout", BuildLayoutTab());
-        AddTab(header, contentHost, "Effects", BuildEffectsTab());
+        var closeButton = new Button { Content = "", Style = (Style)FindResource("CloseButton") };
+        closeButton.Click += (_, _) => Close();
+        Grid.SetColumn(closeButton, 1);
+        titleBar.Children.Add(closeButton);
+
+        Grid.SetRow(titleBar, 0);
+        root.Children.Add(titleBar);
+
+        var body = new Grid();
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetRow(body, 1);
+        root.Children.Add(body);
+
+        var sidebar = new Border
+        {
+            Background = Brush("Brush.Surface", Brushes.DarkGray),
+            BorderBrush = Brush("Brush.Border", Brushes.Gray),
+            BorderThickness = new Thickness(0, 0, 1, 0),
+        };
+        var nav = new StackPanel { Margin = new Thickness(0, 10, 0, 10) };
+        sidebar.Child = nav;
+        Grid.SetColumn(sidebar, 0);
+        body.Children.Add(sidebar);
+
+        var contentHost = new Grid();
+        Grid.SetColumn(contentHost, 1);
+        body.Children.Add(contentHost);
+
+        AddTab(nav, contentHost, "Appearance", BuildAppearanceTab());
+        AddTab(nav, contentHost, "Colors", BuildColorsTab());
+        AddTab(nav, contentHost, "Headings", BuildHeadingsTab());
+        AddTab(nav, contentHost, "Layout", BuildLayoutTab());
+        AddTab(nav, contentHost, "Effects", BuildEffectsTab());
         SelectTab("Appearance");
 
-        Content = root;
+        Content = outer;
 
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
     }
 
     // ================= tab plumbing =================
 
-    private void AddTab(StackPanel header, Grid contentHost, string name, UIElement content)
+    private void AddTab(StackPanel nav, Grid contentHost, string name, UIElement content)
     {
         var scroll = new ScrollViewer
         {
             Content = content,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Padding = new Thickness(12, 4, 20, 12),
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Padding = new Thickness(28, 24, 28, 24),
             Visibility = Visibility.Collapsed,
         };
+        // ScrollViewer content isn't reliably width-constrained by HorizontalScrollBarVisibility=Disabled
+        // alone once WindowChrome is in play, so pin it to the viewport explicitly.
+        if (content is FrameworkElement contentElement)
+        {
+            scroll.SizeChanged += (_, e) =>
+                contentElement.Width = Math.Max(0, e.NewSize.Width - scroll.Padding.Left - scroll.Padding.Right);
+        }
         contentHost.Children.Add(scroll);
         _panels[name] = scroll;
 
         var button = new Button
         {
             Content = name,
-            Style = (Style)FindResource("SettingsTabButton"),
-            Margin = new Thickness(0, 0, 4, 0),
+            Style = (Style)FindResource("SettingsNavItem"),
         };
         button.Click += (_, _) => SelectTab(name);
-        header.Children.Add(button);
+        nav.Children.Add(button);
         _tabButtons[name] = button;
     }
 
@@ -130,8 +176,8 @@ public sealed class SettingsWindow : Window
 
         panel.Children.Add(Header("Theme"));
         var themeRow = new StackPanel { Orientation = Orientation.Horizontal };
-        var dark = new RadioButton { Content = "Dark", GroupName = "theme", Style = (Style)FindResource("SettingsCheckBox"), Margin = new Thickness(0, 0, 16, 0) };
-        var light = new RadioButton { Content = "Light", GroupName = "theme", Style = (Style)FindResource("SettingsCheckBox") };
+        var dark = new RadioButton { Content = "Dark", GroupName = "theme", Style = (Style)FindResource("SettingsRadioButton"), Margin = new Thickness(0, 0, 16, 0) };
+        var light = new RadioButton { Content = "Light", GroupName = "theme", Style = (Style)FindResource("SettingsRadioButton") };
         dark.IsChecked = _settings.Theme == AppTheme.Dark;
         light.IsChecked = _settings.Theme == AppTheme.Light;
         dark.Checked += (_, _) => { _settings.Theme = AppTheme.Dark; _onChange(); };
@@ -166,15 +212,8 @@ public sealed class SettingsWindow : Window
         var panel = new StackPanel();
 
         panel.Children.Add(Header("Style"));
-        var underline = new CheckBox
-        {
-            Content = "Underline headings",
-            Style = (Style)FindResource("SettingsCheckBox"),
-            IsChecked = _settings.HeadingUnderline,
-        };
-        underline.Checked += (_, _) => { _settings.HeadingUnderline = true; _onChange(); };
-        underline.Unchecked += (_, _) => { _settings.HeadingUnderline = false; _onChange(); };
-        panel.Children.Add(underline);
+        panel.Children.Add(ToggleRow("Underline headings", null, _settings.HeadingUnderline,
+            v => { _settings.HeadingUnderline = v; _onChange(); }));
 
         panel.Children.Add(Header("Colors"));
         panel.Children.Add(Hint("Per-level colours for h1 through h6. An empty field falls back to \"Default heading colour\" below."));
@@ -219,17 +258,8 @@ public sealed class SettingsWindow : Window
         var panel = new StackPanel();
 
         panel.Children.Add(Header("Grain"));
-        panel.Children.Add(Hint("Overlays a faint static noise texture on the editor surface."));
-        var grain = new CheckBox
-        {
-            Content = "Enable grain texture",
-            Style = (Style)FindResource("SettingsCheckBox"),
-            Margin = new Thickness(0, 6, 0, 0),
-            IsChecked = _settings.GrainEnabled,
-        };
-        grain.Checked += (_, _) => { _settings.GrainEnabled = true; _onChange(); };
-        grain.Unchecked += (_, _) => { _settings.GrainEnabled = false; _onChange(); };
-        panel.Children.Add(grain);
+        panel.Children.Add(ToggleRow("Enable grain texture", "Overlays a faint static noise texture on the editor surface.",
+            _settings.GrainEnabled, v => { _settings.GrainEnabled = v; _onChange(); }));
 
         return panel;
     }
@@ -391,6 +421,36 @@ public sealed class SettingsWindow : Window
         {
             return Brushes.Transparent;
         }
+    }
+
+    private FrameworkElement ToggleRow(string label, string? hint, bool initialValue, Action<bool> onChange)
+    {
+        var dock = new DockPanel { Margin = new Thickness(0, 8, 0, 8), LastChildFill = true };
+
+        var toggle = new CheckBox
+        {
+            Style = (Style)FindResource("ToggleSwitch"),
+            IsChecked = initialValue,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        toggle.Checked += (_, _) => onChange(true);
+        toggle.Unchecked += (_, _) => onChange(false);
+        DockPanel.SetDock(toggle, Dock.Right);
+        dock.Children.Add(toggle);
+
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 24, 0) };
+        text.Children.Add(new TextBlock { Text = label, Style = (Style)FindResource("SettingsLabel") });
+        if (!string.IsNullOrEmpty(hint))
+            text.Children.Add(new TextBlock
+            {
+                Text = hint,
+                Style = (Style)FindResource("SettingsHint"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0),
+            });
+        dock.Children.Add(text);
+
+        return dock;
     }
 
     private Grid LabeledRow(string label, out StackPanel slot)
