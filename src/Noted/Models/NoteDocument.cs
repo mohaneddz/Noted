@@ -41,6 +41,9 @@ public sealed class NoteDocument : INotifyPropertyChanged
 
     public double ScrollOffset { get; set; }
 
+    /// <summary>Where this note's autosaved draft is cached while it has no real file yet, or null.</summary>
+    public string? DraftPath { get; private set; }
+
     public string? FilePath
     {
         get => _filePath;
@@ -109,6 +112,39 @@ public sealed class NoteDocument : INotifyPropertyChanged
 
         FilePath = path;
         IsModified = false;
+        DeleteDraft();
+    }
+
+    /// <summary>Loads a note that was cached as a draft — it still has no real file, so it stays "Untitled".</summary>
+    public static NoteDocument LoadDraft(string draftPath)
+    {
+        var note = new NoteDocument(File.ReadAllText(draftPath, new UTF8Encoding(false)), null, new UTF8Encoding(false));
+        note.Document.UndoStack.ClearAll();
+        note.IsModified = false;
+        note.DraftPath = draftPath;
+        return note;
+    }
+
+    /// <summary>Silently caches this never-saved note's content so it survives an app restart.</summary>
+    public void SaveDraft(string draftPath)
+    {
+        File.WriteAllText(draftPath, Document.Text, new UTF8Encoding(false));
+        DraftPath = draftPath;
+        IsModified = false;
+    }
+
+    /// <summary>Discards the cached draft — called once the note is either saved for real or closed unsaved.</summary>
+    public void DeleteDraft()
+    {
+        if (DraftPath is null) return;
+        try
+        {
+            File.Delete(DraftPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+        DraftPath = null;
     }
 
     public void MarkClean() => IsModified = false;

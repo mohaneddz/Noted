@@ -111,12 +111,13 @@ public sealed class SettingsWindow : Window
         Grid.SetColumn(contentHost, 1);
         body.Children.Add(contentHost);
 
+        AddTab(nav, contentHost, "General", BuildGeneralTab());
         AddTab(nav, contentHost, "Appearance", BuildAppearanceTab());
         AddTab(nav, contentHost, "Colors", BuildColorsTab());
         AddTab(nav, contentHost, "Headings", BuildHeadingsTab());
         AddTab(nav, contentHost, "Layout", BuildLayoutTab());
         AddTab(nav, contentHost, "Effects", BuildEffectsTab());
-        SelectTab("Appearance");
+        SelectTab("General");
 
         Content = outer;
 
@@ -169,6 +170,19 @@ public sealed class SettingsWindow : Window
     }
 
     // ================= tabs =================
+
+    private UIElement BuildGeneralTab()
+    {
+        var panel = new StackPanel();
+
+        panel.Children.Add(Header("Saving"));
+        panel.Children.Add(ToggleRow("Autosave", "Saves the active note automatically about 1.5 seconds after you stop typing. "
+            + "Notes you haven't saved anywhere yet are cached privately and reopen next time you launch Noted — "
+            + "closing their tab without saving discards the cache.",
+            _settings.AutoSaveEnabled, v => { _settings.AutoSaveEnabled = v; _onChange(); }));
+
+        return panel;
+    }
 
     private UIElement BuildAppearanceTab()
     {
@@ -260,6 +274,8 @@ public sealed class SettingsWindow : Window
         panel.Children.Add(Header("Grain"));
         panel.Children.Add(ToggleRow("Enable grain texture", "Overlays a faint static noise texture on the editor surface.",
             _settings.GrainEnabled, v => { _settings.GrainEnabled = v; _onChange(); }));
+        panel.Children.Add(SliderRow("Intensity", _settings.GrainOpacity, 0.01, 0.25, 0.01,
+            value => { _settings.GrainOpacity = value; _onChange(); }));
 
         return panel;
     }

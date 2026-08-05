@@ -24,6 +24,9 @@ public sealed class AppSettings
 
     public double FontSize { get; set; } = DefaultFontSize;
 
+    /// <summary>Saves the active document automatically ~1.5s after you stop typing.</summary>
+    public bool AutoSaveEnabled { get; set; } = true;
+
     public bool WordWrap { get; set; } = true;
 
     public bool ShowLineNumbers { get; set; }
@@ -60,6 +63,9 @@ public sealed class AppSettings
     /// <summary>Overlays a subtle animated-free noise texture on the editor surface.</summary>
     public bool GrainEnabled { get; set; }
 
+    /// <summary>Opacity of the grain overlay, when enabled.</summary>
+    public double GrainOpacity { get; set; } = 0.05;
+
     /// <summary>Hex colour overrides for the active theme; a null entry falls back to the theme default.</summary>
     public ThemeColorOverrides Colors { get; set; } = new();
 
@@ -72,6 +78,10 @@ public sealed class AppSettings
 
     [JsonIgnore]
     public static string FilePath { get; } = Path.Combine(DirectoryPath, "settings.json");
+
+    /// <summary>Where autosaved drafts of never-saved documents are cached between sessions.</summary>
+    [JsonIgnore]
+    public static string DraftsDirectoryPath { get; } = Path.Combine(DirectoryPath, "Drafts");
 
     public static AppSettings Load()
     {

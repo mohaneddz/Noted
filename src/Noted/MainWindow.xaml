@@ -115,7 +115,7 @@
                                    VerticalScrollBarVisibility="Auto"
                                    Padding="48,20,48,60"
                                    FontSize="15.5" />
-                <Border x:Name="GrainOverlay" IsHitTestVisible="False" Visibility="Collapsed" Opacity="0.05" />
+                <Border x:Name="GrainOverlay" IsHitTestVisible="False" Visibility="Collapsed" />
             </Grid>
 
             <!-- ============ status bar ============ -->
@@ -129,7 +129,8 @@
                         <TextBlock x:Name="StatusCaret" Style="{StaticResource StatusText}" />
                         <TextBlock x:Name="StatusEncoding" Style="{StaticResource StatusText}" Margin="0" />
                     </StackPanel>
-                    <TextBlock />
+                    <TextBlock x:Name="StatusSaved" Style="{StaticResource StatusText}"
+                               Foreground="{DynamicResource Brush.Accent}" Margin="10,0,0,0" Opacity="0" />
                 </DockPanel>
             </Grid>
         </Grid>

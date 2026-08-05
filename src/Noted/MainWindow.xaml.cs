@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Search;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
     private readonly MarkdownElementGenerator _generator;
     private readonly BlockDecorationRenderer _decorations;
     private readonly DispatcherTimer _statusTimer;
+    private readonly DispatcherTimer _autoSaveTimer;
     private readonly AppSettings _settings;
     private readonly Stack<ClosedDocument> _closed = new();
 
@@ -59,6 +61,12 @@ public partial class MainWindow : Window
             Interval = TimeSpan.FromMilliseconds(220),
         };
         _statusTimer.Tick += (_, _) => { _statusTimer.Stop(); UpdateStatusBar(); };
+
+        _autoSaveTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(1500),
+        };
+        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); AutoSaveActiveDocument(); };
 
         TabList.ItemsSource = _documents;
 
@@ -198,8 +206,41 @@ public partial class MainWindow : Window
 
         foreach (string path in paths) OpenPath(path, focus: false);
 
+        RestoreDrafts();
+
         if (_documents.Count == 0) NewDocument();
         TabList.SelectedIndex = 0;
+    }
+
+    /// <summary>Reopens untitled notes that were autosaved to the drafts cache on a previous run.</summary>
+    private void RestoreDrafts()
+    {
+        if (!Directory.Exists(AppSettings.DraftsDirectoryPath)) return;
+
+        IEnumerable<string> draftPaths;
+        try
+        {
+            draftPaths = Directory.EnumerateFiles(AppSettings.DraftsDirectoryPath, "*.md").ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        bool restoredAny = false;
+        foreach (string draftPath in draftPaths)
+        {
+            try
+            {
+                _documents.Add(NoteDocument.LoadDraft(draftPath));
+                restoredAny = true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        if (restoredAny) RenumberUntitledDocuments();
     }
 
     // ================= documents =================
@@ -298,6 +339,7 @@ public partial class MainWindow : Window
 
         RenumberUntitledDocuments();
         UpdateStatusBar();
+        ShowSavedIndicator();
         return true;
     }
 
@@ -313,6 +355,9 @@ public partial class MainWindow : Window
     {
         if (note is null) return;
         if (!ConfirmClose(note)) return;
+
+        // Only a real save keeps a document around; an untitled note's secret draft cache dies with its tab.
+        if (note.FilePath is null) note.DeleteDraft();
 
         if (note.FilePath is not null || note.Document.TextLength > 0)
             _closed.Push(new ClosedDocument(note.FilePath, note.Document.Text));
@@ -333,6 +378,7 @@ public partial class MainWindow : Window
 
     private bool ConfirmClose(NoteDocument note)
     {
+        if (ReferenceEquals(note, _active)) FlushAutoSave();
         if (!note.IsModified) return true;
 
         TabList.SelectedItem = note;
@@ -357,6 +403,7 @@ public partial class MainWindow : Window
 
         if (_active is not null)
         {
+            FlushAutoSave();
             _active.CaretOffset = Editor.CaretOffset;
             _active.ScrollOffset = Editor.VerticalOffset;
         }
@@ -536,6 +583,7 @@ public partial class MainWindow : Window
         if (_switchingTabs) return;
 
         ScheduleStatusUpdate();
+        ScheduleAutoSave();
         if (_active is not null) Title = $"{_active.Title} — Noted";
     }
 
@@ -625,7 +673,11 @@ public partial class MainWindow : Window
         Editor.TextArea.Caret.CaretBrush = theme.Accent;
 
         GrainOverlay.Visibility = _settings.GrainEnabled ? Visibility.Visible : Visibility.Collapsed;
-        if (_settings.GrainEnabled) GrainOverlay.Background = GrainTexture.Brush;
+        if (_settings.GrainEnabled)
+        {
+            GrainOverlay.Background = GrainTexture.Brush;
+            GrainOverlay.Opacity = _settings.GrainOpacity;
+        }
 
         ApplyChromeSpacing();
 
@@ -671,6 +723,59 @@ public partial class MainWindow : Window
         _statusTimer.Start();
     }
 
+    // ================= autosave =================
+
+    private void ScheduleAutoSave()
+    {
+        if (!_settings.AutoSaveEnabled) return;
+        _autoSaveTimer.Stop();
+        _autoSaveTimer.Start();
+    }
+
+    /// <summary>Saves right now instead of waiting out the debounce — used before a tab/app close can ask "save changes?".</summary>
+    private void FlushAutoSave()
+    {
+        if (!_autoSaveTimer.IsEnabled) return;
+        _autoSaveTimer.Stop();
+        AutoSaveActiveDocument();
+    }
+
+    private void AutoSaveActiveDocument()
+    {
+        if (!_settings.AutoSaveEnabled) return;
+
+        var note = _active;
+        if (note is null || !note.IsModified) return;
+
+        try
+        {
+            if (note.FilePath is not null)
+            {
+                note.Save(note.FilePath);
+            }
+            else
+            {
+                Directory.CreateDirectory(AppSettings.DraftsDirectoryPath);
+                note.SaveDraft(note.DraftPath ?? Path.Combine(AppSettings.DraftsDirectoryPath, $"{Guid.NewGuid():N}.md"));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        RenumberUntitledDocuments();
+        UpdateStatusBar();
+        ShowSavedIndicator();
+    }
+
+    private void ShowSavedIndicator()
+    {
+        StatusSaved.Text = "Saved";
+        StatusSaved.BeginAnimation(UIElement.OpacityProperty,
+            new DoubleAnimation(1, 0, TimeSpan.FromSeconds(1.4)) { BeginTime = TimeSpan.FromSeconds(0.6) });
+    }
+
     private void UpdateStatusBar()
     {
         if (_active is null) return;
@@ -678,7 +783,7 @@ public partial class MainWindow : Window
         var document = _active.Document;
         var caret = Editor.TextArea.Caret;
 
-        StatusPath.Text = _active.FilePath ?? "Not saved yet";
+        StatusPath.Text = _active.FilePath ?? (_active.DraftPath is null ? "Not saved yet" : "Draft — not saved to a file yet");
         StatusCaret.Text = $"Ln {caret.Line}, Col {caret.Column}";
         StatusEncoding.Text = DescribeEncoding(_active);
 
