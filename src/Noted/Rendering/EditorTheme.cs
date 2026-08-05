@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Media;
+using Noted.Services;
 
 namespace Noted.Rendering;
 
@@ -29,6 +30,12 @@ public sealed class EditorTheme
     public required Brush RuleLine { get; init; }
     public required Brush Selection { get; init; }
     public required Brush CurrentLine { get; init; }
+
+    /// <summary>Per-level (h1..h6) heading colour; defaults to <see cref="Heading"/> unless overridden in settings.</summary>
+    public Brush[] HeadingColors { get; init; } = [];
+
+    /// <summary>Draws an underline beneath heading text when true.</summary>
+    public bool HeadingUnderline { get; init; }
 
     /// <summary>Relative size of h1..h6 against the base editor font size.</summary>
     public static readonly double[] HeadingScale = [1.90, 1.58, 1.34, 1.18, 1.07, 1.00];
@@ -82,6 +89,61 @@ public sealed class EditorTheme
     });
 
     public static EditorTheme For(AppTheme mode) => mode == AppTheme.Light ? Light : Dark;
+
+    /// <summary>Builds a theme for <paramref name="mode"/> with the user's colour and heading overrides applied.</summary>
+    public static EditorTheme Resolve(AppTheme mode, AppSettings settings)
+    {
+        var baseTheme = For(mode);
+        var colors = settings.Colors;
+
+        var headingBase = TryRgb(colors.Heading) ?? baseTheme.Heading;
+        var headingColors = new Brush[6];
+        for (int i = 0; i < 6; i++)
+        {
+            string? hex = i < settings.HeadingColors.Count ? settings.HeadingColors[i] : null;
+            headingColors[i] = TryRgb(hex) ?? headingBase;
+        }
+
+        return Freeze(new EditorTheme
+        {
+            Mode = mode,
+            Background = TryRgb(colors.Background) ?? baseTheme.Background,
+            Surface = TryRgb(colors.Surface) ?? baseTheme.Surface,
+            SurfaceAlt = baseTheme.SurfaceAlt,
+            Border = baseTheme.Border,
+            Text = TryRgb(colors.Text) ?? baseTheme.Text,
+            Muted = TryRgb(colors.Muted) ?? baseTheme.Muted,
+            Faint = baseTheme.Faint,
+            Accent = TryRgb(colors.Accent) ?? baseTheme.Accent,
+            Heading = headingBase,
+            Link = TryRgb(colors.Link) ?? baseTheme.Link,
+            Code = TryRgb(colors.Code) ?? baseTheme.Code,
+            CodeBackground = baseTheme.CodeBackground,
+            Quote = TryRgb(colors.Quote) ?? baseTheme.Quote,
+            QuoteBar = baseTheme.QuoteBar,
+            HighlightBackground = baseTheme.HighlightBackground,
+            HighlightText = baseTheme.HighlightText,
+            RuleLine = TryRgb(colors.RuleLine) ?? baseTheme.RuleLine,
+            Selection = baseTheme.Selection,
+            CurrentLine = baseTheme.CurrentLine,
+            HeadingColors = headingColors,
+            HeadingUnderline = settings.HeadingUnderline,
+        });
+    }
+
+    /// <summary>Parses a hex colour string, returning null for a blank/invalid/absent override.</summary>
+    private static SolidColorBrush? TryRgb(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return null;
+        try
+        {
+            return Rgb(hex);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
 
     private static SolidColorBrush Rgb(string hex) => new((Color)ColorConverter.ConvertFromString(hex)!);
 

@@ -35,11 +35,14 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
         // Block-level look first; inline tokens paint over the top of it.
         if (info.HeadingLevel > 0)
         {
-            double scale = EditorTheme.HeadingScale[Math.Clamp(info.HeadingLevel, 1, 6) - 1];
+            int level = Math.Clamp(info.HeadingLevel, 1, 6);
+            double scale = EditorTheme.HeadingScale[level - 1];
+            var headingBrush = level <= Theme.HeadingColors.Length ? Theme.HeadingColors[level - 1] : Theme.Heading;
             ChangeLinePart(lineStart, lineEnd, el =>
             {
-                el.TextRunProperties.SetForegroundBrush(Theme.Heading);
+                el.TextRunProperties.SetForegroundBrush(headingBrush);
                 el.TextRunProperties.SetFontRenderingEmSize(el.TextRunProperties.FontRenderingEmSize * scale);
+                el.TextRunProperties.SetTextDecorations(Theme.HeadingUnderline ? TextDecorations.Underline : null);
                 Restyle(el, weight: FontWeights.Bold);
             });
         }

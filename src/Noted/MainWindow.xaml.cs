@@ -595,7 +595,7 @@ public partial class MainWindow : Window
 
     private void ApplySettingsToEditor()
     {
-        var theme = EditorTheme.For(_settings.Theme);
+        var theme = EditorTheme.Resolve(_settings.Theme, _settings);
 
         _colorizer.Theme = theme;
         _colorizer.MonospaceFont = new FontFamily(_settings.MonospaceFontFamily);
@@ -622,6 +622,11 @@ public partial class MainWindow : Window
         Editor.TextArea.SelectionForeground = null;
         Editor.TextArea.Caret.CaretBrush = theme.Accent;
 
+        GrainOverlay.Visibility = _settings.GrainEnabled ? Visibility.Visible : Visibility.Collapsed;
+        if (_settings.GrainEnabled) GrainOverlay.Background = GrainTexture.Brush;
+
+        ApplyChromeSpacing();
+
         ThemeButton.Content = _settings.Theme == AppTheme.Dark ? "\uE706" : "\uE708";
 
         Editor.TextArea.TextView.Redraw();
@@ -641,11 +646,19 @@ public partial class MainWindow : Window
         double available = EditorHost.ActualWidth;
         if (available <= 0) return;
 
-        double side = Math.Max(28, (available - _settings.ReadingWidth) / 2);
-        Editor.Padding = new Thickness(side, 20, side * 0.6, 60);
+        double side = Math.Max(_settings.MarginHorizontal, (available - _settings.ReadingWidth) / 2);
+        Editor.Padding = new Thickness(side, _settings.MarginTop, side * 0.6, _settings.MarginBottom);
 
         _decorations.ContentWidth = Math.Max(120, available - side * 1.6);
         Editor.TextArea.TextView.InvalidateLayer(ICSharpCode.AvalonEdit.Rendering.KnownLayer.Background);
+    }
+
+    /// <summary>Scales the title bar and status bar height by the "spacing" setting for a more/less airy shell.</summary>
+    private void ApplyChromeSpacing()
+    {
+        double spacing = Math.Clamp(_settings.Spacing, 0.6, 2.0);
+        TitleBarRow.Height = new GridLength(40 * spacing);
+        StatusBarRow.Height = new GridLength(26 * spacing);
     }
 
     // ================= status bar =================

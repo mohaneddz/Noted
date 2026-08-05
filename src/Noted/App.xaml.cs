@@ -36,7 +36,7 @@ public partial class App : Application
     /// <summary>Repoints the shared brush resources so the whole shell restyles in place.</summary>
     public void ApplyTheme(AppTheme mode)
     {
-        var theme = EditorTheme.For(mode);
+        var theme = EditorTheme.Resolve(mode, Settings);
         Settings.Theme = mode;
 
         Set("Brush.Background", theme.Background);

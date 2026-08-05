@@ -42,6 +42,30 @@ public sealed class AppSettings
 
     public List<string> OpenFiles { get; set; } = [];
 
+    /// <summary>Horizontal padding on either side of the reading column.</summary>
+    public double MarginHorizontal { get; set; } = 48;
+
+    /// <summary>Padding above the first line.</summary>
+    public double MarginTop { get; set; } = 20;
+
+    /// <summary>Padding below the last line.</summary>
+    public double MarginBottom { get; set; } = 60;
+
+    /// <summary>Multiplier for interface breathing room — title bar and status bar height, tab padding. 1.0 is normal.</summary>
+    public double Spacing { get; set; } = 1.0;
+
+    /// <summary>Draws an underline beneath heading text.</summary>
+    public bool HeadingUnderline { get; set; }
+
+    /// <summary>Overlays a subtle animated-free noise texture on the editor surface.</summary>
+    public bool GrainEnabled { get; set; }
+
+    /// <summary>Hex colour overrides for the active theme; a null entry falls back to the theme default.</summary>
+    public ThemeColorOverrides Colors { get; set; } = new();
+
+    /// <summary>Per-level (h1..h6) heading colour overrides; a null entry falls back to <see cref="ThemeColorOverrides.Heading"/>.</summary>
+    public List<string?> HeadingColors { get; set; } = [null, null, null, null, null, null];
+
     [JsonIgnore]
     public static string DirectoryPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Noted");
@@ -74,4 +98,19 @@ public sealed class AppSettings
         {
         }
     }
+}
+
+/// <summary>Hex string overrides for the named theme tokens. Null means "use the active theme's default".</summary>
+public sealed class ThemeColorOverrides
+{
+    public string? Background { get; set; }
+    public string? Surface { get; set; }
+    public string? Text { get; set; }
+    public string? Muted { get; set; }
+    public string? Accent { get; set; }
+    public string? Heading { get; set; }
+    public string? Link { get; set; }
+    public string? Code { get; set; }
+    public string? Quote { get; set; }
+    public string? RuleLine { get; set; }
 }
