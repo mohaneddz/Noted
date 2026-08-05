@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly Stack<ClosedDocument> _closed = new();
 
     private SearchPanel? _searchPanel;
+    private Settings.SettingsWindow? _settingsWindow;
     private NoteDocument? _shortcutSheet;
     private NoteDocument? _active;
     private bool _switchingTabs;
@@ -182,7 +183,8 @@ public partial class MainWindow : Window
         Bind(Key.D0, ctrl, () => SetFontSize(AppSettings.DefaultFontSize));
         Bind(Key.NumPad0, ctrl, () => SetFontSize(AppSettings.DefaultFontSize));
         Bind(Key.P, ctrlShift, ToggleLiveMarkdown);
-        Bind(Key.OemComma, ctrl, OpenSettingsFolder);
+        Bind(Key.OemComma, ctrl, OpenSettings);
+        Bind(Key.OemComma, ctrlShift, OpenSettingsFolder);
         Bind(Key.F1, ModifierKeys.None, ShowShortcutSheet);
 
         void Bind(Key key, ModifierKeys modifiers, Action action) =>
@@ -777,7 +779,8 @@ public partial class MainWindow : Window
         Separator();
 
         Add("Keyboard shortcuts", "F1", ShowShortcutSheet);
-        Add("Settings file…", "Ctrl+,", OpenSettingsFolder);
+        Add("Settings…", "Ctrl+,", OpenSettings);
+        Add("Settings file…", "Ctrl+Shift+,", OpenSettingsFolder);
 
         return menu;
 
@@ -807,6 +810,25 @@ public partial class MainWindow : Window
         }
 
         void Separator() => menu.Items.Add(new Separator { Style = (Style)FindResource("MenuSeparator") });
+    }
+
+    private void OpenSettings()
+    {
+        if (_settingsWindow is null)
+        {
+            _settingsWindow = new Settings.SettingsWindow(this, _settings, RefreshTheme) { Owner = this };
+            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+            _settingsWindow.Show();
+        }
+
+        _settingsWindow.Activate();
+    }
+
+    /// <summary>Re-resolves the theme and reapplies every editor setting; the live-update callback for the settings window.</summary>
+    private void RefreshTheme()
+    {
+        App.Current.ApplyTheme(_settings.Theme);
+        ApplySettingsToEditor();
     }
 
     private void OpenSettingsFolder()
