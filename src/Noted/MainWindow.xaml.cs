@@ -43,6 +43,7 @@ public partial class MainWindow : Window
     private bool _switchingTabs;
     private bool _fullScreen;
     private WindowState _preFullScreenState = WindowState.Normal;
+    private Rect _preFullScreenBounds;
 
     private readonly record struct ClosedDocument(string? FilePath, string Text);
 
@@ -537,19 +538,75 @@ public partial class MainWindow : Window
     {
         _fullScreen = !_fullScreen;
 
-        if (_fullScreen)
-        {
-            _preFullScreenState = WindowState;
-            WindowState = WindowState.Maximized;
-        }
-        else
-        {
-            WindowState = _preFullScreenState;
-        }
+        if (_fullScreen) EnterFullScreen();
+        else ExitFullScreen();
 
         TitleBar.Visibility = _fullScreen ? Visibility.Collapsed : Visibility.Visible;
         StatusBar.Visibility = _fullScreen ? Visibility.Collapsed : Visibility.Visible;
         UpdateMaximizeState();
+    }
+
+    /// <summary>
+    /// A genuine full screen: <see cref="WindowState.Maximized"/> only fills the work area and leaves
+    /// the taskbar showing, so instead we sit the window at the monitor's real pixel bounds and make it
+    /// topmost, which covers the taskbar too.
+    /// </summary>
+    private void EnterFullScreen()
+    {
+        _preFullScreenState = WindowState;
+        _preFullScreenBounds = new Rect(Left, Top, Width, Height);
+
+        // Drop out of Maximized first; a maximized window snaps back to the work area no matter what
+        // rect we ask for.
+        WindowState = WindowState.Normal;
+
+        var bounds = GetCurrentMonitorBounds();
+        Topmost = true;
+        Left = bounds.Left;
+        Top = bounds.Top;
+        Width = bounds.Width;
+        Height = bounds.Height;
+    }
+
+    private void ExitFullScreen()
+    {
+        Topmost = false;
+
+        if (_preFullScreenState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+        else
+        {
+            WindowState = WindowState.Normal;
+            Left = _preFullScreenBounds.Left;
+            Top = _preFullScreenBounds.Top;
+            Width = _preFullScreenBounds.Width;
+            Height = _preFullScreenBounds.Height;
+        }
+    }
+
+    /// <summary>The full (not work-area) bounds of the monitor the window currently sits on, in DIPs.</summary>
+    private Rect GetCurrentMonitorBounds()
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+        var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+
+        var info = new MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfo(monitor, ref info))
+            return new Rect(Left, Top, Width, Height);
+
+        var rc = info.rcMonitor;
+        var source = System.Windows.Interop.HwndSource.FromHwnd(hwnd);
+        if (source?.CompositionTarget is { } target)
+        {
+            var toDip = target.TransformFromDevice;
+            var topLeft = toDip.Transform(new Point(rc.Left, rc.Top));
+            var bottomRight = toDip.Transform(new Point(rc.Right, rc.Bottom));
+            return new Rect(topLeft, bottomRight);
+        }
+
+        return new Rect(rc.Left, rc.Top, rc.Right - rc.Left, rc.Bottom - rc.Top);
     }
 
     private void ToggleLiveMarkdown()
@@ -844,9 +901,34 @@ public partial class MainWindow : Window
     {
         bool maximized = WindowState == WindowState.Maximized;
         MaximizeButton.Content = maximized ? "\uE923" : "\uE922";
+
+        // Full screen owns the whole monitor edge to edge \u2014 no compensating margin, no border.
+        if (_fullScreen)
+        {
+            RootBorder.Margin = new Thickness(0);
+            RootBorder.BorderThickness = new Thickness(0);
+            return;
+        }
+
         RootBorder.Margin = maximized ? new Thickness(7) : new Thickness(0);
         RootBorder.BorderThickness = maximized ? new Thickness(0) : new Thickness(1);
     }
+
+    // ---- Win32: the true monitor bounds, taskbar included ----
+
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct RECT { public int Left, Top, Right, Bottom; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MONITORINFO { public int cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
 
     private void OnMenuClick(object sender, RoutedEventArgs e)
     {
