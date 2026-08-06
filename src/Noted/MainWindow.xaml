@@ -118,6 +118,10 @@
                                    Padding="48,20,48,60"
                                    FontSize="15.5" />
                 <Border x:Name="GrainOverlay" IsHitTestVisible="False" Visibility="Collapsed" />
+                <Thumb x:Name="LeftMarginGrip" Style="{StaticResource MarginGrip}"
+                       HorizontalAlignment="Left" VerticalAlignment="Stretch" />
+                <Thumb x:Name="RightMarginGrip" Style="{StaticResource MarginGrip}"
+                       HorizontalAlignment="Left" VerticalAlignment="Stretch" />
             </Grid>
 
             <!-- ============ status bar ============ -->

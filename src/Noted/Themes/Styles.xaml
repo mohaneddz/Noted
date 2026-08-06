@@ -93,6 +93,30 @@
         </Setter>
     </Style>
 
+    <!-- Invisible drag strip sitting on a reading-column edge; drag to resize the margins. -->
+    <Style x:Key="MarginGrip" TargetType="Thumb">
+        <Setter Property="Cursor" Value="SizeWE" />
+        <Setter Property="Width" Value="10" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border Background="Transparent">
+                        <Border x:Name="Line" Width="2" CornerRadius="1"
+                                HorizontalAlignment="Center" Background="Transparent" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Line" Property="Background" Value="{DynamicResource Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Line" Property="Background" Value="{DynamicResource Brush.Accent}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ===================== tab strip ===================== -->
 
     <Style x:Key="TabCloseButton" TargetType="Button" BasedOn="{StaticResource IconButton}">

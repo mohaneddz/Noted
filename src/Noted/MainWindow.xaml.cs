@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private NoteDocument? _shortcutSheet;
     private NoteDocument? _active;
     private bool _switchingTabs;
+    private bool _resizingMargin;
     private bool _fullScreen;
     private WindowState _preFullScreenState = WindowState.Normal;
     private Rect _preFullScreenBounds;
@@ -97,6 +98,13 @@ public partial class MainWindow : Window
         textView.BackgroundRenderers.Add(_decorations);
 
         DataObject.AddPastingHandler(Editor, OnEditorPaste);
+
+        LeftMarginGrip.DragStarted += (_, _) => _resizingMargin = true;
+        RightMarginGrip.DragStarted += (_, _) => _resizingMargin = true;
+        LeftMarginGrip.DragDelta += (_, e) => ResizeReadingColumn(-2 * e.HorizontalChange);
+        RightMarginGrip.DragDelta += (_, e) => ResizeReadingColumn(2 * e.HorizontalChange);
+        LeftMarginGrip.DragCompleted += (_, _) => EndMarginResize();
+        RightMarginGrip.DragCompleted += (_, _) => EndMarginResize();
 
         Editor.TextArea.TextView.Options.EnableHyperlinks = false;
         Editor.TextArea.TextView.Options.EnableEmailHyperlinks = false;
@@ -933,6 +941,28 @@ public partial class MainWindow : Window
         _decorations.ContentWidth = Math.Max(120, available - side * 1.6);
         _images.MaxWidth = Math.Max(120, available - side - rightSide);
         Editor.TextArea.TextView.InvalidateLayer(ICSharpCode.AvalonEdit.Rendering.KnownLayer.Background);
+
+        // Park the drag grips on the page edges. Skip this mid-drag: moving a Thumb under the cursor
+        // resets its drag origin and makes the resize jump.
+        if (!_resizingMargin)
+        {
+            double gripHalf = LeftMarginGrip.Width / 2;
+            LeftMarginGrip.Margin = new Thickness(Math.Max(0, side - pageInset) - gripHalf, 0, 0, 0);
+            RightMarginGrip.Margin = new Thickness(available - Math.Max(0, rightSide - pageInset) - gripHalf, 0, 0, 0);
+        }
+    }
+
+    /// <summary>Widens or narrows the reading column live as a margin grip is dragged.</summary>
+    private void ResizeReadingColumn(double delta)
+    {
+        _settings.ReadingWidth = Math.Clamp(_settings.ReadingWidth + delta, 480, 1400);
+        UpdateReadingWidth();
+    }
+
+    private void EndMarginResize()
+    {
+        _resizingMargin = false;
+        UpdateReadingWidth();
     }
 
     /// <summary>Scales the title bar and status bar height by the "spacing" setting for a more/less airy shell.</summary>
