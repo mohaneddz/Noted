@@ -258,6 +258,26 @@ public class MarkdownScannerTests
         Assert.True(info.AllMarkers);
     }
 
+    // ---------------- footnotes ----------------
+
+    [Fact]
+    public void FootnoteReferenceKeepsTheIdAndHidesTheBrackets()
+    {
+        const string line = "A claim.[^1] More.";
+        var token = ContentAt(line, "1");
+
+        Assert.True((token.Style & MdStyle.Footnote) != 0);
+        Assert.Equal("A claim.1 More.", Rendered(line));
+    }
+
+    [Fact]
+    public void FootnoteWithAWordIdentifierWorks()
+        => Assert.True((ContentAt("see[^important-note] here", "important-note").Style & MdStyle.Footnote) != 0);
+
+    [Fact]
+    public void CaretBracketWithoutAnIdIsNotAFootnote()
+        => Assert.Equal("[^]", Rendered("[^]"));
+
     // ---------------- callouts ----------------
 
     [Theory]

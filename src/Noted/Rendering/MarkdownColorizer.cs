@@ -142,7 +142,12 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
             el.TextRunProperties.SetForegroundBrush(Theme.HighlightText);
         }
 
-        if ((style & MdStyle.Link) != 0)
+        if ((style & MdStyle.Footnote) != 0)
+        {
+            el.TextRunProperties.SetForegroundBrush(Theme.Link);
+            el.TextRunProperties.SetFontRenderingEmSize(el.TextRunProperties.FontRenderingEmSize * 0.8);
+        }
+        else if ((style & MdStyle.Link) != 0)
         {
             el.TextRunProperties.SetForegroundBrush(Theme.Link);
             el.TextRunProperties.SetTextDecorations(TextDecorations.Underline);

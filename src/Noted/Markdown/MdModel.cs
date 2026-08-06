@@ -30,6 +30,7 @@ public enum MdStyle
     TableDelimiter = 1 << 19,
     TableEdge = 1 << 20,
     Callout = 1 << 21,
+    Footnote = 1 << 22,
 }
 
 /// <summary>The GitHub-style admonition kinds, as written in a <c>&gt; [!NOTE]</c> blockquote header.</summary>

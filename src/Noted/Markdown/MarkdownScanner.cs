@@ -361,6 +361,19 @@ public static class MarkdownScanner
                     continue;
                 }
 
+                case '[' when i + 1 < end && s[i + 1] == '^':
+                {
+                    int close = FootnoteEnd(s, i + 2, end);
+                    if (close < 0) break;
+                    Flush(i);
+                    output.Add(new MdToken(i, 2, MdStyle.Marker | MdStyle.Footnote));           // "[^"
+                    Emit(output, i + 2, close - (i + 2), inherit | MdStyle.Footnote);            // the id
+                    output.Add(new MdToken(close, 1, MdStyle.Marker | MdStyle.Footnote));        // "]"
+                    i = close + 1;
+                    plain = i;
+                    continue;
+                }
+
                 case '!' when i + 1 < end && s[i + 1] == '[':
                 case '[':
                 {
@@ -472,6 +485,21 @@ public static class MarkdownScanner
             if (ch == '\\') { i++; continue; }
             if (ch == open) depth++;
             else if (ch == close && --depth == 0) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>Index of the <c>]</c> closing a <c>[^id]</c> footnote reference, or -1. The id must be
+    /// non-empty and contain no whitespace or brackets.</summary>
+    private static int FootnoteEnd(string s, int idStart, int end)
+    {
+        int i = idStart;
+        while (i < end)
+        {
+            char c = s[i];
+            if (c == ']') return i > idStart ? i : -1;
+            if (char.IsWhiteSpace(c) || c == '[' || c == '^') return -1;
+            i++;
         }
         return -1;
     }
