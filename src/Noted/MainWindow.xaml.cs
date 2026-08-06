@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private readonly RevealTracker _reveal = new();
     private readonly MarkdownColorizer _colorizer;
     private readonly MarkdownElementGenerator _generator;
+    private readonly EmojiElementGenerator _emoji;
     private readonly ImageElementGenerator _images = new();
     private readonly BlockDecorationRenderer _decorations;
     private readonly DispatcherTimer _statusTimer;
@@ -59,6 +60,7 @@ public partial class MainWindow : Window
 
         _colorizer = new MarkdownColorizer(_analyzer, _reveal);
         _generator = new MarkdownElementGenerator(_analyzer, _reveal);
+        _emoji = new EmojiElementGenerator(_analyzer, _reveal);
         _decorations = new BlockDecorationRenderer(_analyzer, _reveal);
 
         _statusTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -95,6 +97,7 @@ public partial class MainWindow : Window
         // Images first: they claim the whole ![](…) span before the marker generator can pick at it.
         textView.ElementGenerators.Add(_images);
         textView.ElementGenerators.Add(_generator);
+        textView.ElementGenerators.Add(_emoji);
         textView.BackgroundRenderers.Add(_decorations);
 
         DataObject.AddPastingHandler(Editor, OnEditorPaste);
@@ -877,6 +880,7 @@ public partial class MainWindow : Window
         _colorizer.MonospaceFont = new FontFamily(_settings.MonospaceFontFamily);
         _generator.Theme = theme;
         _generator.HideMarkers = _settings.LiveMarkdown;
+        _emoji.HideMarkers = _settings.LiveMarkdown;
         _images.HideMarkers = _settings.LiveMarkdown;
         _reveal.Enabled = _settings.LiveMarkdown;
         _decorations.Theme = theme;
