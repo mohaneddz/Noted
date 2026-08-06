@@ -83,6 +83,10 @@ public sealed class AppSettings
     [JsonIgnore]
     public static string DraftsDirectoryPath { get; } = Path.Combine(DirectoryPath, "Drafts");
 
+    /// <summary>Shared store for pasted images; notes reference them here by absolute path.</summary>
+    [JsonIgnore]
+    public static string ImagesDirectoryPath { get; } = Path.Combine(DirectoryPath, "images");
+
     public static AppSettings Load()
     {
         try

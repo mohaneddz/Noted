@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private readonly RevealTracker _reveal = new();
     private readonly MarkdownColorizer _colorizer;
     private readonly MarkdownElementGenerator _generator;
+    private readonly ImageElementGenerator _images = new();
     private readonly BlockDecorationRenderer _decorations;
     private readonly DispatcherTimer _statusTimer;
     private readonly DispatcherTimer _autoSaveTimer;
@@ -90,8 +91,12 @@ public partial class MainWindow : Window
     {
         var textView = Editor.TextArea.TextView;
         textView.LineTransformers.Add(_colorizer);
+        // Images first: they claim the whole ![](…) span before the marker generator can pick at it.
+        textView.ElementGenerators.Add(_images);
         textView.ElementGenerators.Add(_generator);
         textView.BackgroundRenderers.Add(_decorations);
+
+        DataObject.AddPastingHandler(Editor, OnEditorPaste);
 
         Editor.TextArea.TextView.Options.EnableHyperlinks = false;
         Editor.TextArea.TextView.Options.EnableEmailHyperlinks = false;
@@ -665,6 +670,43 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>
+    /// Pasting an image drops it into the shared image cache and inserts a markdown reference to it,
+    /// instead of letting the editor paste nothing (or a bitmap it can't hold as text).
+    /// </summary>
+    private void OnEditorPaste(object sender, DataObjectPastingEventArgs e)
+    {
+        if (!e.DataObject.GetDataPresent(DataFormats.Bitmap)) return;
+        if (Clipboard.GetImage() is not { } image) return;
+
+        string? path = SavePastedImage(image);
+        if (path is null) return;
+
+        Editor.Document.Insert(Editor.CaretOffset, $"![]({path})");
+        e.CancelCommand();
+        StatusPath.Text = "Pasted image";
+    }
+
+    /// <summary>Writes a pasted bitmap to <c>%APPDATA%\Noted\images</c> as PNG and returns its path.</summary>
+    private static string? SavePastedImage(System.Windows.Media.Imaging.BitmapSource image)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppSettings.ImagesDirectoryPath);
+            string path = Path.Combine(AppSettings.ImagesDirectoryPath, $"{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.png");
+
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+            using var stream = File.Create(path);
+            encoder.Save(stream);
+            return path;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>A hand cursor over a code-block's language tag (copies it) or a link (Ctrl+click opens it).</summary>
     private void OnTextViewMouseMove(object sender, MouseEventArgs e)
     {
@@ -827,6 +869,7 @@ public partial class MainWindow : Window
         _colorizer.MonospaceFont = new FontFamily(_settings.MonospaceFontFamily);
         _generator.Theme = theme;
         _generator.HideMarkers = _settings.LiveMarkdown;
+        _images.HideMarkers = _settings.LiveMarkdown;
         _reveal.Enabled = _settings.LiveMarkdown;
         _decorations.Theme = theme;
         _decorations.MonospaceFont = new FontFamily(_settings.MonospaceFontFamily);
@@ -888,6 +931,7 @@ public partial class MainWindow : Window
             Math.Max(0, side - pageInset), 0, Math.Max(0, rightSide - pageInset), 0);
 
         _decorations.ContentWidth = Math.Max(120, available - side * 1.6);
+        _images.MaxWidth = Math.Max(120, available - side - rightSide);
         Editor.TextArea.TextView.InvalidateLayer(ICSharpCode.AvalonEdit.Rendering.KnownLayer.Background);
     }
 
