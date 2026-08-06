@@ -6,10 +6,11 @@ public class MarkdownScannerTests
 {
     private static MdLine Scan(string line) => MarkdownScanner.Scan(line);
 
-    private static string Rendered(string line)
+    private static string Rendered(string line) => Rendered(line, Scan(line));
+
+    private static string Rendered(string line, MdLine info)
     {
         // What the reader sees once markers are hidden: the line minus every marker span.
-        var info = Scan(line);
         var keep = new bool[line.Length];
         Array.Fill(keep, true);
 
@@ -206,6 +207,56 @@ public class MarkdownScannerTests
     [InlineData("- - a")]
     public void NearMissesAreNotRules(string line)
         => Assert.False((Scan(line).Block & MdStyle.Rule) != 0);
+
+    // ---------------- tables ----------------
+
+    [Fact]
+    public void TableRowDimsPipesAndKeepsCellText()
+    {
+        const string line = "| Heading | Yes | 10 |";
+        var info = MarkdownScanner.ScanTableRow(line, header: true);
+
+        Assert.True((info.Block & MdStyle.Table) != 0);
+        Assert.True((info.Block & MdStyle.TableHeader) != 0);
+        Assert.All(info.Tokens.Where(t => (t.Style & MdStyle.Table) != 0), t => Assert.True(t.IsMarker));
+        Assert.Equal(" Heading  Yes  10 ", Rendered(line, info));
+    }
+
+    [Fact]
+    public void OuterTablePipesAreEdgesAndInnerOnesAreNot()
+    {
+        var info = MarkdownScanner.ScanTableRow("| a | b |", header: false);
+        var pipes = info.Tokens.Where(t => (t.Style & MdStyle.Table) != 0).ToList();
+
+        Assert.Equal(3, pipes.Count);
+        Assert.True((pipes[0].Style & MdStyle.TableEdge) != 0);   // leading border
+        Assert.False((pipes[1].Style & MdStyle.TableEdge) != 0);  // column separator
+        Assert.True((pipes[2].Style & MdStyle.TableEdge) != 0);   // trailing border
+    }
+
+    [Fact]
+    public void EscapedPipeInsideACellIsNotAColumnSeparator()
+    {
+        var info = MarkdownScanner.ScanTableRow("| A \\| B | C |", header: false);
+        Assert.Equal(3, info.Tokens.Count(t => (t.Style & MdStyle.Table) != 0));
+    }
+
+    [Fact]
+    public void CellContentIsStillParsedForInlineMarkup()
+    {
+        var info = MarkdownScanner.ScanTableRow("| **Bold** | `code` |", header: false);
+        Assert.Contains(info.Tokens, t => !t.IsMarker && (t.Style & MdStyle.Bold) != 0);
+        Assert.Contains(info.Tokens, t => !t.IsMarker && (t.Style & MdStyle.Code) != 0);
+    }
+
+    [Fact]
+    public void DelimiterRowIsDrawnLikeARule()
+    {
+        var info = MarkdownScanner.ScanTableDelimiter("|:--------|:---------:|-------:|");
+        Assert.True((info.Block & MdStyle.Rule) != 0);
+        Assert.True((info.Block & MdStyle.TableDelimiter) != 0);
+        Assert.True(info.AllMarkers);
+    }
 
     // ---------------- the all-markers guard ----------------
 

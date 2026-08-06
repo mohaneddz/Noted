@@ -124,6 +124,40 @@ public class MarkdownAnalyzerTests
         Assert.Equal("python", language);
     }
 
+    // ---------------- tables ----------------
+
+    [Fact]
+    public void DelimiterRowTurnsTheLineAboveIntoAHeaderAndBelowIntoRows()
+    {
+        var analyzer = AnalyzerFor("intro\n\n| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n\nafter");
+
+        Assert.Equal(MdStyle.None, analyzer.GetLine(1).Block & MdStyle.Table);
+        Assert.True((analyzer.GetLine(3).Block & MdStyle.TableHeader) != 0);
+        Assert.True((analyzer.GetLine(4).Block & MdStyle.TableDelimiter) != 0);
+        Assert.True((analyzer.GetLine(5).Block & MdStyle.Table) != 0);
+        Assert.True((analyzer.GetLine(6).Block & MdStyle.Table) != 0);
+        Assert.Equal(MdStyle.None, analyzer.GetLine(8).Block & MdStyle.Table);   // blank line ends the table
+    }
+
+    [Fact]
+    public void ADashRuleIsNotMistakenForATableDelimiter()
+    {
+        var analyzer = AnalyzerFor("Some text\n---\nmore");
+
+        Assert.Equal(MdStyle.None, analyzer.GetLine(1).Block & MdStyle.TableHeader);
+        Assert.True((analyzer.GetLine(2).Block & MdStyle.Rule) != 0);
+        Assert.Equal(MdStyle.None, analyzer.GetLine(2).Block & MdStyle.Table);
+    }
+
+    [Fact]
+    public void TablesInsideCodeFencesAreLeftAlone()
+    {
+        var analyzer = AnalyzerFor("```\n| A | B |\n|---|---|\n```");
+
+        Assert.True((analyzer.GetLine(2).Block & MdStyle.CodeBlock) != 0);
+        Assert.Equal(MdStyle.None, analyzer.GetLine(2).Block & MdStyle.Table);
+    }
+
     [Fact]
     public void SeparateFencesAreSeparateBlocks()
     {

@@ -29,6 +29,75 @@ public static class MarkdownScanner
         };
     }
 
+    /// <summary>
+    /// A table's delimiter row (<c>|:---|---:|</c>). It carries no prose, so it is treated like a
+    /// horizontal rule: the characters fade out and a stroke is drawn where the row sits, giving
+    /// the header a clean underline.
+    /// </summary>
+    public static MdLine ScanTableDelimiter(string line)
+    {
+        int i = SkipWhitespace(line, 0);
+        int contentEnd = line.Length;
+        while (contentEnd > i && (line[contentEnd - 1] == ' ' || line[contentEnd - 1] == '\t')) contentEnd--;
+
+        var tokens = new List<MdToken>(1);
+        if (contentEnd > i)
+            tokens.Add(new MdToken(i, contentEnd - i, MdStyle.Marker | MdStyle.Rule | MdStyle.Table | MdStyle.TableDelimiter));
+
+        return new MdLine
+        {
+            Block = MdStyle.Rule | MdStyle.Table | MdStyle.TableDelimiter,
+            ContentStart = i,
+            Tokens = tokens,
+            AllMarkers = true,
+        };
+    }
+
+    /// <summary>
+    /// A table header or body row. Pipes become dim column separators; each cell is parsed for the
+    /// usual inline markup so bold, code and links work inside cells. The header row is flagged so
+    /// the colorizer can weight it.
+    /// </summary>
+    public static MdLine ScanTableRow(string line, bool header)
+    {
+        var tokens = new List<MdToken>(8);
+        int i = SkipWhitespace(line, 0);
+
+        // Collect the unescaped pipe positions so the first and last can be marked as table edges.
+        var pipes = new List<int>(4);
+        for (int p = i; p < line.Length; p++)
+        {
+            if (line[p] == '\\') { p++; continue; }
+            if (line[p] == '|') pipes.Add(p);
+        }
+
+        int trimmedEnd = line.Length;
+        while (trimmedEnd > i && (line[trimmedEnd - 1] == ' ' || line[trimmedEnd - 1] == '\t')) trimmedEnd--;
+
+        int cellStart = i;
+        for (int k = 0; k < pipes.Count; k++)
+        {
+            int pipe = pipes[k];
+            if (pipe > cellStart) ParseInline(line, cellStart, pipe, MdStyle.None, tokens, 0);
+
+            bool leadingEdge = k == 0 && pipe == i;
+            bool trailingEdge = k == pipes.Count - 1 && pipe == trimmedEnd - 1;
+            var style = MdStyle.Marker | MdStyle.Table | ((leadingEdge || trailingEdge) ? MdStyle.TableEdge : MdStyle.None);
+            tokens.Add(new MdToken(pipe, 1, style));
+            cellStart = pipe + 1;
+        }
+        if (cellStart < line.Length) ParseInline(line, cellStart, line.Length, MdStyle.None, tokens, 0);
+
+        tokens.Sort((a, b) => a.Offset.CompareTo(b.Offset));
+
+        return new MdLine
+        {
+            Block = MdStyle.Table | (header ? MdStyle.TableHeader : MdStyle.None),
+            ContentStart = i,
+            Tokens = tokens,
+        };
+    }
+
     public static MdLine Scan(string line)
     {
         if (line.Length == 0) return MdLine.Empty;

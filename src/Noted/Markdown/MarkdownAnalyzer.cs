@@ -11,12 +11,15 @@ public sealed class MarkdownAnalyzer
 {
     private enum Fence : byte { None, Delimiter, Inside }
 
+    private enum TableRole : byte { None, Header, Delimiter, Row }
+
     /// <summary>One fenced code block, from its opening delimiter line to its closing one.</summary>
     private readonly record struct FenceBlock(int StartLine, int EndLine, string Language);
 
     private TextDocument? _document;
     private MdLine?[] _cache = [];
     private Fence[] _fences = [];
+    private TableRole[] _tables = [];
     private int[] _blockStart = [];
     private List<FenceBlock> _blocks = [];
     private bool _stale = true;
@@ -81,10 +84,14 @@ public sealed class MarkdownAnalyzer
         var line = _document!.GetLineByNumber(lineNumber);
         string text = _document.GetText(line.Offset, line.Length);
 
-        return _fences[lineNumber] switch
+        if (_fences[lineNumber] == Fence.Delimiter) return MarkdownScanner.ScanFenceDelimiter(text);
+        if (_fences[lineNumber] == Fence.Inside) return MarkdownScanner.ScanFencedContent(text);
+
+        return _tables[lineNumber] switch
         {
-            Fence.Delimiter => MarkdownScanner.ScanFenceDelimiter(text),
-            Fence.Inside => MarkdownScanner.ScanFencedContent(text),
+            TableRole.Header => MarkdownScanner.ScanTableRow(text, header: true),
+            TableRole.Delimiter => MarkdownScanner.ScanTableDelimiter(text),
+            TableRole.Row => MarkdownScanner.ScanTableRow(text, header: false),
             _ => MarkdownScanner.Scan(text),
         };
     }
@@ -97,6 +104,7 @@ public sealed class MarkdownAnalyzer
         int lineCount = _document!.LineCount;
         _cache = new MdLine?[lineCount + 1];
         _fences = new Fence[lineCount + 1];
+        _tables = new TableRole[lineCount + 1];
         _blockStart = new int[lineCount + 1];
         _blocks = [];
 
@@ -133,6 +141,29 @@ public sealed class MarkdownAnalyzer
             {
                 _fences[n] = Fence.Inside;
             }
+
+            // Tables live outside fences. A delimiter row (|---|:--:|) turns the line above it
+            // into a header and every non-blank line below it into a body row, until a blank line.
+            if (_fences[n] == Fence.None && _tables[n] == TableRole.None)
+            {
+                if (n > 1 && _fences[n - 1] == Fence.None && _tables[n - 1] == TableRole.None &&
+                    IsTableDelimiter(TextOf(n)) && HasContentAndPipe(TextOf(n - 1)))
+                {
+                    _tables[n - 1] = TableRole.Header;
+                    _tables[n] = TableRole.Delimiter;
+                }
+                else if (n > 1 && _tables[n - 1] is TableRole.Delimiter or TableRole.Row &&
+                         TextOf(n).Trim().Length > 0)
+                {
+                    _tables[n] = TableRole.Row;
+                }
+            }
+        }
+
+        string TextOf(int number)
+        {
+            var l = _document.GetLineByNumber(number);
+            return _document.GetText(l.Offset, l.Length);
         }
 
         // An unclosed fence still gets a block, running to the end of the document.
@@ -144,6 +175,61 @@ public sealed class MarkdownAnalyzer
             int index = _blocks.Count;
             for (int n = start; n <= end; n++) _blockStart[n] = index;
         }
+    }
+
+    /// <summary>True if the line is a GFM table delimiter: pipe-separated cells of <c>:?-+:?</c>,
+    /// with at least one pipe (so it can never be confused with a <c>---</c> rule or setext underline).</summary>
+    private static bool IsTableDelimiter(string text)
+    {
+        int i = 0;
+        int end = text.Length;
+        while (end > i && char.IsWhiteSpace(text[end - 1])) end--;
+        while (i < end && char.IsWhiteSpace(text[i])) i++;
+        if (i >= end) return false;
+
+        bool sawPipe = false, sawDashInCell = false, sawDashOverall = false, cellHasContent = false;
+        for (; i < end; i++)
+        {
+            char c = text[i];
+            switch (c)
+            {
+                case '|':
+                    if (cellHasContent && !sawDashInCell) return false;
+                    sawPipe = true;
+                    sawDashInCell = false;
+                    cellHasContent = false;
+                    break;
+                case '-':
+                    sawDashInCell = true;
+                    sawDashOverall = true;
+                    cellHasContent = true;
+                    break;
+                case ':':
+                    cellHasContent = true;
+                    break;
+                case ' ':
+                case '\t':
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        if (cellHasContent && !sawDashInCell) return false;
+        return sawPipe && sawDashOverall;
+    }
+
+    /// <summary>True if the line has visible text and at least one unescaped pipe — the shape of a table row.</summary>
+    private static bool HasContentAndPipe(string text)
+    {
+        bool content = false, pipe = false;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\') { i++; content = true; continue; }
+            if (text[i] == '|') pipe = true;
+            else if (!char.IsWhiteSpace(text[i])) content = true;
+        }
+        return content && pipe;
     }
 
     /// <summary>Text after the fence run on its opening line, e.g. <c>```csharp</c> → <c>csharp</c>.</summary>

@@ -95,6 +95,11 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
                 }
             }
 
+            if ((info.Block & MdStyle.Table) != 0)
+            {
+                drawingContext.DrawRectangle(Theme.Surface, null, new Rect(0, top, right, height + 0.5));
+            }
+
             if ((info.Block & MdStyle.Quote) != 0)
             {
                 double contentX = ContentX(textView, visualLine, info.ContentStart);

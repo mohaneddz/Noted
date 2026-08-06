@@ -25,6 +25,10 @@ public enum MdStyle
     TaskChecked = 1 << 14,
     Image = 1 << 15,
     Bullet = 1 << 16,
+    Table = 1 << 17,
+    TableHeader = 1 << 18,
+    TableDelimiter = 1 << 19,
+    TableEdge = 1 << 20,
 }
 
 /// <summary>A styled slice of a single line. <see cref="Offset"/> is relative to the line start.</summary>

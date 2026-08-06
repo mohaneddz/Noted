@@ -64,6 +64,14 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
                 Restyle(el, style: FontStyles.Italic);
             });
         }
+        else if ((info.Block & MdStyle.TableHeader) != 0)
+        {
+            ChangeLinePart(lineStart, lineEnd, el =>
+            {
+                el.TextRunProperties.SetForegroundBrush(Theme.Heading);
+                Restyle(el, weight: FontWeights.Bold);
+            });
+        }
 
         foreach (var token in info.Tokens)
         {
