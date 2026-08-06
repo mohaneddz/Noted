@@ -159,6 +159,26 @@ public static class MarkdownScanner
             i = SkipWhitespace(line, i);
         }
 
+        // The quote bar anchors here — where prose begins after the "> " prefixes — even on a
+        // callout line, whose label is part of that prose.
+        int quoteContentStart = i;
+
+        // ---- callout label: "> [!NOTE]" ----------------------------------------
+        bool isCallout = false;
+        if (quoteDepth > 0 && i + 1 < line.Length && line[i] == '[' && line[i + 1] == '!')
+        {
+            int close = line.IndexOf(']', i + 2);
+            if (close > i + 2 && Callout.Parse(line.AsSpan(i + 2, close - (i + 2))) != CalloutKind.None)
+            {
+                block |= MdStyle.Callout;
+                isCallout = true;
+                tokens.Add(new MdToken(i, 2, MdStyle.Marker | MdStyle.Callout));
+                tokens.Add(new MdToken(i + 2, close - (i + 2), MdStyle.Callout));
+                tokens.Add(new MdToken(close, 1, MdStyle.Marker | MdStyle.Callout));
+                i = SkipWhitespace(line, close + 1);
+            }
+        }
+
         // ---- horizontal rule ----------------------------------------------------
         if (IsHorizontalRule(line, i))
         {
@@ -193,7 +213,7 @@ public static class MarkdownScanner
         }
 
         // ---- list item ----------------------------------------------------------
-        int contentStart = i;
+        int contentStart = isCallout ? quoteContentStart : i;
         if (headingLevel == 0)
         {
             int listEnd = MatchListMarker(line, i, out bool bullet);

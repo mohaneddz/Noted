@@ -28,6 +28,7 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
         if (info.Tokens.Count == 0 && info.Block == MdStyle.None) return;
 
         bool revealed = _reveal.IsRevealed(line.LineNumber);
+        var calloutKind = (info.Block & MdStyle.Callout) != 0 ? _analyzer.GetCallout(line.LineNumber) : CalloutKind.None;
         int lineStart = line.Offset;
         int lineEnd = line.EndOffset;
         if (lineEnd <= lineStart) return;
@@ -100,6 +101,17 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
                     // whole line already carries a decoration, and AvalonEdit unions the existing
                     // collection with the argument — unioning with null throws and takes the app down.
                     // The heading's underline simply carries through its "#" markers, which is fine.
+                });
+                continue;
+            }
+
+            if ((style & MdStyle.Callout) != 0)
+            {
+                var calloutBrush = Theme.CalloutColor(calloutKind);
+                ChangeLinePart(start, end, el =>
+                {
+                    el.TextRunProperties.SetForegroundBrush(calloutBrush);
+                    Restyle(el, weight: FontWeights.Bold, style: FontStyles.Normal);
                 });
                 continue;
             }

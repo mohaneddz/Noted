@@ -191,6 +191,28 @@ public class MarkdownAnalyzerTests
         Assert.True((analyzer.GetLine(2).Block & MdStyle.Rule) != 0);
     }
 
+    // ---------------- callouts ----------------
+
+    [Fact]
+    public void CalloutKindSpansEveryLineOfItsBlockquote()
+    {
+        var analyzer = AnalyzerFor("> [!WARNING]\n> Be careful here.\n> Second line.\n\nplain");
+
+        Assert.Equal(CalloutKind.Warning, analyzer.GetCallout(1));
+        Assert.Equal(CalloutKind.Warning, analyzer.GetCallout(2));
+        Assert.Equal(CalloutKind.Warning, analyzer.GetCallout(3));
+        Assert.Equal(CalloutKind.None, analyzer.GetCallout(5));
+    }
+
+    [Fact]
+    public void ATagThatIsNotTheFirstQuoteLineDoesNotStartACallout()
+    {
+        var analyzer = AnalyzerFor("> ordinary quote\n> [!NOTE]\n> more");
+
+        Assert.Equal(CalloutKind.None, analyzer.GetCallout(1));
+        Assert.Equal(CalloutKind.None, analyzer.GetCallout(2));
+    }
+
     [Fact]
     public void SeparateFencesAreSeparateBlocks()
     {

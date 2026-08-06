@@ -23,6 +23,7 @@ public sealed class MarkdownAnalyzer
     private Fence[] _fences = [];
     private TableRole[] _tables = [];
     private Setext[] _setext = [];
+    private CalloutKind[] _callouts = [];
     private int[] _blockStart = [];
     private List<FenceBlock> _blocks = [];
     private bool _stale = true;
@@ -116,6 +117,7 @@ public sealed class MarkdownAnalyzer
         _fences = new Fence[lineCount + 1];
         _tables = new TableRole[lineCount + 1];
         _setext = new Setext[lineCount + 1];
+        _callouts = new CalloutKind[lineCount + 1];
         _blockStart = new int[lineCount + 1];
         _blocks = [];
 
@@ -188,6 +190,20 @@ public sealed class MarkdownAnalyzer
             return _document.GetText(l.Offset, l.Length);
         }
 
+        // Callouts: a "> [!NOTE]" header tints its whole blockquote, so the coloured bar runs the
+        // full height of the admonition rather than only its first line.
+        for (int n = 1; n <= lineCount; n++)
+        {
+            if (_fences[n] != Fence.None || _callouts[n] != CalloutKind.None) continue;
+
+            var kind = CalloutHeaderKind(TextOf(n));
+            if (kind == CalloutKind.None) continue;
+            if (n > 1 && _fences[n - 1] == Fence.None && IsBlockquote(TextOf(n - 1))) continue;  // not the first line
+
+            for (int m = n; m <= lineCount && _fences[m] == Fence.None && IsBlockquote(TextOf(m)); m++)
+                _callouts[m] = kind;
+        }
+
         // An unclosed fence still gets a block, running to the end of the document.
         if (inFence) CloseBlock(openLine, lineCount, language);
 
@@ -239,6 +255,34 @@ public sealed class MarkdownAnalyzer
 
         if (cellHasContent && !sawDashInCell) return false;
         return sawPipe && sawDashOverall;
+    }
+
+    /// <summary>The callout kind of a blockquote line's admonition tag, if it opens with one.</summary>
+    public CalloutKind GetCallout(int lineNumber)
+    {
+        if (_document is null) return CalloutKind.None;
+        EnsureFresh();
+        return lineNumber >= 1 && lineNumber < _callouts.Length ? _callouts[lineNumber] : CalloutKind.None;
+    }
+
+    /// <summary>Reads a line's callout kind by reusing the scanner's own <c>[!TYPE]</c> recognition.</summary>
+    private static CalloutKind CalloutHeaderKind(string text)
+    {
+        var info = MarkdownScanner.Scan(text);
+        if ((info.Block & MdStyle.Callout) == 0) return CalloutKind.None;
+
+        foreach (var token in info.Tokens)
+            if (!token.IsMarker && (token.Style & MdStyle.Callout) != 0)
+                return Callout.Parse(text.AsSpan(token.Offset, token.Length));
+
+        return CalloutKind.None;
+    }
+
+    private static bool IsBlockquote(string text)
+    {
+        int i = 0;
+        while (i < text.Length && (text[i] == ' ' || text[i] == '\t')) i++;
+        return i < text.Length && text[i] == '>';
     }
 
     /// <summary>Returns 1 for a <c>===</c> underline, 2 for a <c>---</c> underline, or null if the line

@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Media;
+using Noted.Markdown;
 using Noted.Services;
 
 namespace Noted.Rendering;
@@ -38,6 +39,16 @@ public sealed class EditorTheme
     /// <summary>Per-level (h1..h6) heading colour; defaults to <see cref="Heading"/> unless overridden in settings.</summary>
     public Brush[] HeadingColors { get; init; } = [];
 
+    /// <summary>Accent colour per <see cref="CalloutKind"/> (indexed by its enum value) for callout bars and labels.</summary>
+    public Brush[] CalloutColors { get; init; } = [];
+
+    /// <summary>The bar/label colour for a callout of <paramref name="kind"/>, falling back to the quote bar.</summary>
+    public Brush CalloutColor(CalloutKind kind)
+    {
+        int i = (int)kind;
+        return i > 0 && i < CalloutColors.Length ? CalloutColors[i] : QuoteBar;
+    }
+
     /// <summary>Draws an underline beneath heading text when true.</summary>
     public bool HeadingUnderline { get; init; }
 
@@ -67,6 +78,7 @@ public sealed class EditorTheme
         RuleLine = Rgb("#3A3A44"),
         Selection = Argb("#4C8B7CF6"),
         CurrentLine = Argb("#14FFFFFF"),
+        CalloutColors = Callouts("#6EA8FE", "#3FB950", "#A371F7", "#D29922", "#F85149"),
     });
 
     public static EditorTheme Light { get; } = Freeze(new EditorTheme
@@ -92,6 +104,7 @@ public sealed class EditorTheme
         RuleLine = Rgb("#DCDCE4"),
         Selection = Argb("#406C5CE7"),
         CurrentLine = Argb("#0A000000"),
+        CalloutColors = Callouts("#1B6ED0", "#1A7F37", "#8250DF", "#9A6700", "#CF222E"),
     });
 
     public static EditorTheme For(AppTheme mode) => mode == AppTheme.Light ? Light : Dark;
@@ -136,6 +149,7 @@ public sealed class EditorTheme
             CurrentLine = baseTheme.CurrentLine,
             HeadingColors = headingColors,
             HeadingUnderline = settings.HeadingUnderline,
+            CalloutColors = baseTheme.CalloutColors,
         });
     }
 
@@ -154,6 +168,19 @@ public sealed class EditorTheme
     }
 
     private static SolidColorBrush Rgb(string hex) => new((Color)ColorConverter.ConvertFromString(hex)!);
+
+    /// <summary>Builds a frozen callout palette indexed by <see cref="CalloutKind"/> (slot 0 is the unused None).</summary>
+    private static Brush[] Callouts(params string[] hex)
+    {
+        var brushes = new Brush[hex.Length + 1];
+        for (int i = 0; i < hex.Length; i++)
+        {
+            var brush = Rgb(hex[i]);
+            brush.Freeze();
+            brushes[i + 1] = brush;
+        }
+        return brushes;
+    }
 
     /// <summary>Scales a colour's channels toward black by <paramref name="factor"/> (&lt;1 darkens).</summary>
     private static SolidColorBrush Shade(Color c, double factor)

@@ -29,6 +29,36 @@ public enum MdStyle
     TableHeader = 1 << 18,
     TableDelimiter = 1 << 19,
     TableEdge = 1 << 20,
+    Callout = 1 << 21,
+}
+
+/// <summary>The GitHub-style admonition kinds, as written in a <c>&gt; [!NOTE]</c> blockquote header.</summary>
+public enum CalloutKind { None, Note, Tip, Important, Warning, Caution }
+
+public static class Callout
+{
+    /// <summary>Maps a bang-label (<c>NOTE</c>, <c>tip</c>, …) to its kind, or <see cref="CalloutKind.None"/>
+    /// for anything outside the recognised set — those stay literal <c>[!text]</c>.</summary>
+    public static CalloutKind Parse(ReadOnlySpan<char> type) => type switch
+    {
+        _ when type.Equals("NOTE", StringComparison.OrdinalIgnoreCase) => CalloutKind.Note,
+        _ when type.Equals("TIP", StringComparison.OrdinalIgnoreCase) => CalloutKind.Tip,
+        _ when type.Equals("IMPORTANT", StringComparison.OrdinalIgnoreCase) => CalloutKind.Important,
+        _ when type.Equals("WARNING", StringComparison.OrdinalIgnoreCase) => CalloutKind.Warning,
+        _ when type.Equals("CAUTION", StringComparison.OrdinalIgnoreCase) => CalloutKind.Caution,
+        _ => CalloutKind.None,
+    };
+
+    /// <summary>The label shown in place of <c>[!NOTE]</c> — a friendly title-cased word, no brackets.</summary>
+    public static string Label(CalloutKind kind) => kind switch
+    {
+        CalloutKind.Note => "Note",
+        CalloutKind.Tip => "Tip",
+        CalloutKind.Important => "Important",
+        CalloutKind.Warning => "Warning",
+        CalloutKind.Caution => "Caution",
+        _ => string.Empty,
+    };
 }
 
 /// <summary>A styled slice of a single line. <see cref="Offset"/> is relative to the line start.</summary>

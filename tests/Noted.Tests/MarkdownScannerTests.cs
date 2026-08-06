@@ -258,6 +258,34 @@ public class MarkdownScannerTests
         Assert.True(info.AllMarkers);
     }
 
+    // ---------------- callouts ----------------
+
+    [Theory]
+    [InlineData("> [!NOTE]", "NOTE")]
+    [InlineData("> [!WARNING]", "WARNING")]
+    [InlineData("> [!tip]", "tip")]
+    public void CalloutLabelKeepsTheTypeAndHidesTheBrackets(string line, string label)
+    {
+        var info = Scan(line);
+
+        Assert.True((info.Block & MdStyle.Callout) != 0);
+        Assert.Contains(info.Tokens, t => !t.IsMarker && (t.Style & MdStyle.Callout) != 0);
+        Assert.Equal(label, Rendered(line).Trim());
+    }
+
+    [Fact]
+    public void UnknownBangLabelIsNotACallout()
+    {
+        var info = Scan("> [!FOOBAR]");
+        Assert.Equal(MdStyle.None, info.Block & MdStyle.Callout);
+    }
+
+    [Fact]
+    public void CalloutTagIsOnlyRecognisedInsideABlockquote()
+    {
+        Assert.Equal(MdStyle.None, Scan("[!NOTE]").Block & MdStyle.Callout);
+    }
+
     // ---------------- the all-markers guard ----------------
 
     [Fact]

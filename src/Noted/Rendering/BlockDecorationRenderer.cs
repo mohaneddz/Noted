@@ -102,13 +102,15 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
 
             if ((info.Block & MdStyle.Quote) != 0)
             {
+                var kind = _analyzer.GetCallout(visualLine.FirstDocumentLine.LineNumber);
+                var barBrush = kind != CalloutKind.None ? Theme.CalloutColor(kind) : Theme.QuoteBar;
                 double contentX = ContentX(textView, visualLine, info.ContentStart);
                 double spacing = Math.Min(BarWidth + BarGap, Math.Max(contentX, BarWidth) / info.QuoteDepth);
                 for (int depth = 0; depth < info.QuoteDepth; depth++)
                 {
                     double x = contentX - (info.QuoteDepth - depth) * spacing;
                     if (x < 0) x = 0;
-                    drawingContext.DrawRectangle(Theme.QuoteBar, null, new Rect(x, top, BarWidth, height));
+                    drawingContext.DrawRectangle(barBrush, null, new Rect(x, top, BarWidth, height));
                 }
             }
 
