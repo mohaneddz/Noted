@@ -88,7 +88,10 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
                 ChangeLinePart(start, end, el =>
                 {
                     el.TextRunProperties.SetForegroundBrush(markerBrush);
-                    el.TextRunProperties.SetTextDecorations(null);
+                    // Never pass null to SetTextDecorations here: when a heading line is underlined the
+                    // whole line already carries a decoration, and AvalonEdit unions the existing
+                    // collection with the argument — unioning with null throws and takes the app down.
+                    // The heading's underline simply carries through its "#" markers, which is fine.
                 });
                 continue;
             }

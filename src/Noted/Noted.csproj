@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <LangVersion>latest</LangVersion>
     <AssemblyName>Noted</AssemblyName>
     <RootNamespace>Noted</RootNamespace>
@@ -20,6 +21,13 @@
     <Description>A lightweight markdown notepad for Windows</Description>
     <Copyright>Copyright © Noted</Copyright>
   </PropertyGroup>
+
+  <!-- WinForms is referenced purely for its native ColorDialog; drop its global usings so they don't
+       collide with the WPF types (Brush, Color, Application, …) used everywhere else. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />

@@ -701,10 +701,15 @@ public partial class MainWindow : Window
         if (available <= 0) return;
 
         double side = Math.Max(_settings.MarginHorizontal, (available - _settings.ReadingWidth) / 2);
-        Editor.Padding = new Thickness(side, _settings.MarginTop, side * 0.6, _settings.MarginBottom);
+        double rightSide = side * 0.6;
+        Editor.Padding = new Thickness(side, _settings.MarginTop, rightSide, _settings.MarginBottom);
 
         // Light "page" behind the text column; the darker EditorHost shows through as the margins.
-        ReadingSurface.Margin = new Thickness(side, 0, side * 0.6, 0);
+        // The page extends a little past the text on both sides so letters keep a small breathing
+        // strip of paper before the darker margin begins, instead of sitting flush against it.
+        const double pageInset = 20;
+        ReadingSurface.Margin = new Thickness(
+            Math.Max(0, side - pageInset), 0, Math.Max(0, rightSide - pageInset), 0);
 
         _decorations.ContentWidth = Math.Max(120, available - side * 1.6);
         Editor.TextArea.TextView.InvalidateLayer(ICSharpCode.AvalonEdit.Rendering.KnownLayer.Background);

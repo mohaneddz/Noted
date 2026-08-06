@@ -348,12 +348,14 @@ public sealed class SettingsWindow : Window
     {
         var grid = LabeledRow(label, out var slot);
 
-        var value = new TextBlock
+        // A typed value box paired with the slider: dragging updates the box, and typing a valid
+        // number inside the range drives the slider — both preview instantly.
+        var value = new TextBox
         {
-            Style = (Style)FindResource("SettingsHint"),
-            Width = 44,
-            TextAlignment = TextAlignment.Right,
+            Style = (Style)FindResource("SettingsTextBox"),
+            Width = 58,
             Margin = new Thickness(8, 0, 0, 0),
+            TextAlignment = TextAlignment.Right,
             Text = initialValue.ToString("0.##", CultureInfo.InvariantCulture),
         };
 
@@ -363,14 +365,51 @@ public sealed class SettingsWindow : Window
             Maximum = max,
             SmallChange = step,
             Value = initialValue,
-            Width = 220,
+            Width = 200,
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = Brush("Brush.Accent", Brushes.Purple),
         };
+
+        bool syncing = false;
+
         slider.ValueChanged += (_, e) =>
         {
+            if (syncing) return;
+            syncing = true;
             value.Text = e.NewValue.ToString("0.##", CultureInfo.InvariantCulture);
+            syncing = false;
             onChange(e.NewValue);
+        };
+
+        void ApplyTyped()
+        {
+            if (syncing) return;
+            if (double.TryParse(value.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double typed)
+                && typed >= min && typed <= max)
+            {
+                syncing = true;
+                slider.Value = typed;
+                syncing = false;
+                value.ClearValue(Control.ForegroundProperty);
+                onChange(typed);
+            }
+            else
+            {
+                // Leave the slider where it is, but flag the entry as out of range / unparseable.
+                value.Foreground = Brush("Brush.Accent", Brushes.OrangeRed);
+            }
+        }
+
+        value.TextChanged += (_, _) => ApplyTyped();
+        value.LostFocus += (_, _) =>
+        {
+            // Snap a rejected entry back to the slider's real value when focus leaves.
+            if (!double.TryParse(value.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double typed)
+                || typed < min || typed > max)
+            {
+                value.ClearValue(Control.ForegroundProperty);
+                value.Text = slider.Value.ToString("0.##", CultureInfo.InvariantCulture);
+            }
         };
 
         slot.Children.Add(slider);
@@ -384,13 +423,15 @@ public sealed class SettingsWindow : Window
 
         var swatch = new Border
         {
-            Width = 18,
-            Height = 18,
+            Width = 22,
+            Height = 22,
             CornerRadius = new CornerRadius(4),
             BorderThickness = new Thickness(1),
             BorderBrush = Brush("Brush.Border", Brushes.Gray),
             Margin = new Thickness(0, 0, 8, 0),
             Background = SwatchBrush(get()),
+            Cursor = Cursors.Hand,
+            ToolTip = "Pick a colour",
         };
 
         var box = new TextBox
@@ -409,16 +450,55 @@ public sealed class SettingsWindow : Window
             ToolTip = "Reset to theme default",
         };
 
-        void Commit(string? hex)
+        bool syncing = false;
+
+        // Apply a value the moment it's valid, so the editor previews as you type or drag the picker.
+        // An empty field means "reset to the theme default"; a half-typed/invalid hex is flagged and
+        // simply left unapplied until it parses.
+        void Preview()
         {
-            set(string.IsNullOrWhiteSpace(hex) ? null : hex.Trim());
-            swatch.Background = SwatchBrush(get());
-            _onChange();
+            if (syncing) return;
+            string text = box.Text.Trim();
+            if (text.Length == 0)
+            {
+                set(null);
+                swatch.Background = Brushes.Transparent;
+                box.ClearValue(Control.ForegroundProperty);
+                _onChange();
+            }
+            else if (TryParseColor(text, out var color))
+            {
+                set(text);
+                swatch.Background = new SolidColorBrush(color);
+                box.ClearValue(Control.ForegroundProperty);
+                _onChange();
+            }
+            else
+            {
+                box.Foreground = Brush("Brush.Accent", Brushes.OrangeRed);
+            }
         }
 
-        box.LostFocus += (_, _) => Commit(box.Text);
-        box.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Commit(box.Text); Keyboard.ClearFocus(); } };
-        clear.Click += (_, _) => { box.Text = string.Empty; Commit(null); };
+        box.TextChanged += (_, _) => Preview();
+        box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Keyboard.ClearFocus(); };
+
+        clear.Click += (_, _) => { box.Text = string.Empty; };
+
+        swatch.MouseLeftButtonUp += (_, _) =>
+        {
+            using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true, AllowFullOpen = true };
+            if (TryParseColor(box.Text, out var current))
+                dialog.Color = System.Drawing.Color.FromArgb(current.R, current.G, current.B);
+
+            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+            var picked = dialog.Color;
+            syncing = true;
+            box.Text = $"#{picked.R:X2}{picked.G:X2}{picked.B:X2}";
+            box.ClearValue(Control.ForegroundProperty);
+            syncing = false;
+            Preview();
+        };
 
         slot.Children.Add(swatch);
         slot.Children.Add(box);
@@ -426,17 +506,24 @@ public sealed class SettingsWindow : Window
         return grid;
     }
 
-    private static Brush SwatchBrush(string? hex)
+    private static Brush SwatchBrush(string? hex) =>
+        TryParseColor(hex, out var color) ? new SolidColorBrush(color) : Brushes.Transparent;
+
+    private static bool TryParseColor(string? hex, out Color color)
     {
-        if (string.IsNullOrWhiteSpace(hex)) return Brushes.Transparent;
+        color = default;
+        if (string.IsNullOrWhiteSpace(hex)) return false;
         try
         {
-            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!);
+            if (ColorConverter.ConvertFromString(hex.Trim()) is Color parsed)
+            {
+                color = parsed;
+                return true;
+            }
         }
-        catch (FormatException)
-        {
-            return Brushes.Transparent;
-        }
+        catch (FormatException) { }
+        catch (InvalidOperationException) { }
+        return false;
     }
 
     private FrameworkElement ToggleRow(string label, string? hint, bool initialValue, Action<bool> onChange)
