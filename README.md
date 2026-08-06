@@ -48,9 +48,11 @@ Windows desktop runtime on the target machine — if it's missing, the generated
 
 ## What it does
 
-- **Live markdown** — headings, bold, italic, strikethrough, inline code, highlights,
-  links, images, blockquotes (nested), bullet and numbered lists, task checkboxes,
-  horizontal rules, and fenced code blocks
+- **Live markdown** — headings (ATX and setext `===`/`---`), bold, italic, strikethrough,
+  inline code, highlights, links, images, footnote references, blockquotes (nested),
+  bullet and numbered lists, task checkboxes, horizontal rules, fenced code blocks,
+  tables (with a header row, divider and column separators), and GitHub-style callouts
+  (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`)
 - **Tabs** with unsaved indicators, reopen-closed, and session restore — closing an
   untitled tab compacts the remaining "Untitled N" numbers instead of counting up forever
 - **Dark and light themes**, switched with `Ctrl+Shift+D`, plus a full **Settings** window
