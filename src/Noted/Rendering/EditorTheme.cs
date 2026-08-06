@@ -12,6 +12,10 @@ public sealed class EditorTheme
     public required AppTheme Mode { get; init; }
 
     public required Brush Background { get; init; }
+
+    /// <summary>The area outside the reading column; a shade darker than <see cref="Background"/>.</summary>
+    public required Brush Margin { get; init; }
+
     public required Brush Surface { get; init; }
     public required Brush SurfaceAlt { get; init; }
     public required Brush Border { get; init; }
@@ -44,6 +48,7 @@ public sealed class EditorTheme
     {
         Mode = AppTheme.Dark,
         Background = Rgb("#17171A"),
+        Margin = Rgb("#0E0E11"),
         Surface = Rgb("#1E1E23"),
         SurfaceAlt = Rgb("#25252B"),
         Border = Rgb("#2E2E36"),
@@ -68,6 +73,7 @@ public sealed class EditorTheme
     {
         Mode = AppTheme.Light,
         Background = Rgb("#FCFCFD"),
+        Margin = Rgb("#ECECEF"),
         Surface = Rgb("#FFFFFF"),
         SurfaceAlt = Rgb("#F3F3F6"),
         Border = Rgb("#E3E3E9"),
@@ -96,6 +102,7 @@ public sealed class EditorTheme
         var baseTheme = For(mode);
         var colors = settings.Colors;
 
+        var background = TryRgb(colors.Background) ?? baseTheme.Background;
         var headingBase = TryRgb(colors.Heading) ?? baseTheme.Heading;
         var headingColors = new Brush[6];
         for (int i = 0; i < 6; i++)
@@ -107,7 +114,8 @@ public sealed class EditorTheme
         return Freeze(new EditorTheme
         {
             Mode = mode,
-            Background = TryRgb(colors.Background) ?? baseTheme.Background,
+            Background = background,
+            Margin = Shade(((SolidColorBrush)background).Color, mode == AppTheme.Light ? 0.94 : 0.62),
             Surface = TryRgb(colors.Surface) ?? baseTheme.Surface,
             SurfaceAlt = baseTheme.SurfaceAlt,
             Border = baseTheme.Border,
@@ -146,6 +154,13 @@ public sealed class EditorTheme
     }
 
     private static SolidColorBrush Rgb(string hex) => new((Color)ColorConverter.ConvertFromString(hex)!);
+
+    /// <summary>Scales a colour's channels toward black by <paramref name="factor"/> (&lt;1 darkens).</summary>
+    private static SolidColorBrush Shade(Color c, double factor)
+    {
+        byte S(byte v) => (byte)Math.Clamp(v * factor, 0, 255);
+        return new SolidColorBrush(Color.FromRgb(S(c.R), S(c.G), S(c.B)));
+    }
 
     private static SolidColorBrush Argb(string hex) => new((Color)ColorConverter.ConvertFromString(hex)!);
 

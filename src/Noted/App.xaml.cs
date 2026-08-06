@@ -40,6 +40,7 @@ public partial class App : Application
         Settings.Theme = mode;
 
         Set("Brush.Background", theme.Background);
+        Set("Brush.Margin", theme.Margin);
         Set("Brush.Surface", theme.Surface);
         Set("Brush.SurfaceAlt", theme.SurfaceAlt);
         Set("Brush.Border", theme.Border);

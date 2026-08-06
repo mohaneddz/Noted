@@ -104,8 +104,10 @@
             </Grid>
 
             <!-- ============ editor ============ -->
-            <Grid Grid.Row="1" x:Name="EditorHost" Background="{DynamicResource Brush.Background}"
+            <Grid Grid.Row="1" x:Name="EditorHost" Background="{DynamicResource Brush.Margin}"
                   SizeChanged="OnEditorHostSizeChanged">
+                <Border x:Name="ReadingSurface" Background="{DynamicResource Brush.Background}"
+                        IsHitTestVisible="False" />
                 <avalon:TextEditor x:Name="Editor"
                                    Background="Transparent"
                                    BorderThickness="0"

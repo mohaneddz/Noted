@@ -5,6 +5,7 @@
     <!-- Application palette (provided) -->
     <!-- Paper, Ink, Slate, Dusk Blue, Rose -->
     <SolidColorBrush x:Key="Brush.Background" Color="#F7F4EE" /> <!-- Paper -->
+    <SolidColorBrush x:Key="Brush.Margin" Color="#E7E3DA" /> <!-- Paper, shaded -->
     <SolidColorBrush x:Key="Brush.Text" Color="#0F1115" /> <!-- Ink -->
     <SolidColorBrush x:Key="Brush.Surface" Color="#A7A9AE" /> <!-- Slate -->
     <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="#4E6B8A" /> <!-- Dusk Blue -->

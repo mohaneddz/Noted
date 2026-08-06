@@ -703,6 +703,9 @@ public partial class MainWindow : Window
         double side = Math.Max(_settings.MarginHorizontal, (available - _settings.ReadingWidth) / 2);
         Editor.Padding = new Thickness(side, _settings.MarginTop, side * 0.6, _settings.MarginBottom);
 
+        // Light "page" behind the text column; the darker EditorHost shows through as the margins.
+        ReadingSurface.Margin = new Thickness(side, 0, side * 0.6, 0);
+
         _decorations.ContentWidth = Math.Max(120, available - side * 1.6);
         Editor.TextArea.TextView.InvalidateLayer(ICSharpCode.AvalonEdit.Rendering.KnownLayer.Background);
     }
