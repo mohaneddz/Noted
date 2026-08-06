@@ -22,8 +22,10 @@ namespace Noted;
 public partial class MainWindow : Window
 {
     private const string FileFilter =
+        "Markdown & text (*.md;*.markdown;*.mdown;*.mkd;*.txt)|*.md;*.markdown;*.mdown;*.mkd;*.txt|" +
         "Markdown (*.md;*.markdown;*.mdown;*.mkd)|*.md;*.markdown;*.mdown;*.mkd|" +
-        "Text files (*.txt)|*.txt|All files (*.*)|*.*";
+        "Text files (*.txt)|*.txt|" +
+        "All files (*.*)|*.*";
 
     private readonly ObservableCollection<NoteDocument> _documents = [];
     private readonly MarkdownAnalyzer _analyzer = new();
