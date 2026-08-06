@@ -252,8 +252,8 @@ public sealed class SettingsWindow : Window
             value => { _settings.MarginBottom = value; _onChange(); }));
 
         panel.Children.Add(Header("Interface"));
-        panel.Children.Add(Hint("Scales the title bar, tab strip and status bar height."));
-        panel.Children.Add(SliderRow("Spacing", _settings.Spacing, 0.6, 2.0, 0.05,
+        panel.Children.Add(Hint("Scales the title bar, tab strip and status bar height — not the text."));
+        panel.Children.Add(SliderRow("Interface scale", _settings.Spacing, 0.6, 2.0, 0.05,
             value => { _settings.Spacing = value; _onChange(); }));
 
         return panel;

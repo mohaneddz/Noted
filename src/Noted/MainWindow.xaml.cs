@@ -665,21 +665,94 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    /// <summary>A hand cursor over a code-block's language tag hints that it copies the block.</summary>
+    /// <summary>A hand cursor over a code-block's language tag (copies it) or a link (Ctrl+click opens it).</summary>
     private void OnTextViewMouseMove(object sender, MouseEventArgs e)
     {
         var textView = Editor.TextArea.TextView;
-        bool overTag = _decorations.TryHitLanguageTag(e.GetPosition(textView), out _, out _);
-        textView.Cursor = overTag ? Cursors.Hand : Cursors.IBeam;
+        bool interactive = _decorations.TryHitLanguageTag(e.GetPosition(textView), out _, out _)
+            || LinkUrlAt(e.GetPosition(Editor)) is not null;
+        textView.Cursor = interactive ? Cursors.Hand : Cursors.IBeam;
     }
 
     private void OnTextViewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var textView = Editor.TextArea.TextView;
-        if (!_decorations.TryHitLanguageTag(e.GetPosition(textView), out int start, out int end)) return;
+        if (_decorations.TryHitLanguageTag(e.GetPosition(textView), out int start, out int end))
+        {
+            CopyCodeBlock(start, end);
+            e.Handled = true;
+            return;
+        }
 
-        CopyCodeBlock(start, end);
-        e.Handled = true;
+        // Ctrl+click opens a link; a plain click keeps placing the caret so link text stays editable.
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && LinkUrlAt(e.GetPosition(Editor)) is { } url)
+        {
+            OpenLink(url);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>The target URL of a markdown link under a point in editor coordinates, or null.</summary>
+    private string? LinkUrlAt(Point editorPoint)
+    {
+        var document = Editor.Document;
+        if (document is null) return null;
+
+        var position = Editor.GetPositionFromPoint(editorPoint);
+        if (position is not { } pos) return null;
+
+        int offset = document.GetOffset(pos.Location);
+        var docLine = document.GetLineByOffset(offset);
+        int rel = offset - docLine.Offset;
+
+        // Walk the line's tokens tracking the most recent link opener; when the closing "](url)"
+        // marker turns up, the span from opener to url end is the whole link.
+        var info = _analyzer.GetLine(docLine.LineNumber);
+        int openStart = -1;
+        foreach (var token in info.Tokens)
+        {
+            bool isLink = (token.Style & MdStyle.Link) != 0;
+            bool isUrl = (token.Style & MdStyle.Url) != 0;
+
+            if (token.IsMarker && isLink && !isUrl) openStart = token.Offset;
+
+            if (isUrl && openStart >= 0 && rel >= openStart && rel < token.End)
+            {
+                string raw = document.GetText(docLine.Offset + token.Offset, token.Length);
+                return ExtractUrl(raw);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Pulls the address out of a "](https://…)" url marker.</summary>
+    private static string? ExtractUrl(string marker)
+    {
+        int open = marker.IndexOf('(');
+        int close = marker.LastIndexOf(')');
+        if (open < 0 || close <= open) return null;
+
+        string url = marker[(open + 1)..close].Trim();
+        return url.Length == 0 ? null : url;
+    }
+
+    private void OpenLink(string url)
+    {
+        // Only hand well-formed web/mail links to the shell; never launch an arbitrary local path.
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https" or "mailto"))
+        {
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception)
+        {
+        }
     }
 
     /// <summary>Copies the code inside a fenced block (the lines between its delimiters) to the clipboard.</summary>
