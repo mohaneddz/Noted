@@ -36,8 +36,8 @@ public sealed class SettingsWindow : Window
         WindowStyle = WindowStyle.None;
         AllowsTransparency = false;
         ShowInTaskbar = false;
-        Background = Brush("Brush.Background", Brushes.Black);
-        Foreground = Brush("Brush.Text", Brushes.White);
+        this.SetResourceReference(BackgroundProperty, "Brush.Background");
+        this.SetResourceReference(ForegroundProperty, "Brush.Text");
         FontFamily = Application.Current.TryFindResource("Font.Ui") as FontFamily ?? new FontFamily("Segoe UI");
 
         WindowChrome.SetWindowChrome(this, new WindowChrome
@@ -49,23 +49,17 @@ public sealed class SettingsWindow : Window
             UseAeroCaptionButtons = false,
         });
 
-        var outer = new Border
-        {
-            Background = Brush("Brush.Background", Brushes.Black),
-            BorderBrush = Brush("Brush.Border", Brushes.Gray),
-            BorderThickness = new Thickness(1),
-        };
+        var outer = new Border { BorderThickness = new Thickness(1) };
+        outer.SetResourceReference(Border.BackgroundProperty, "Brush.Background");
+        outer.SetResourceReference(Border.BorderBrushProperty, "Brush.Border");
 
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         outer.Child = root;
 
-        var titleBar = new Grid
-        {
-            Height = 40,
-            Background = Brush("Brush.Surface", Brushes.DarkGray),
-        };
+        var titleBar = new Grid { Height = 40 };
+        titleBar.SetResourceReference(Panel.BackgroundProperty, "Brush.Surface");
         titleBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         titleBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleBar.MouseLeftButtonDown += (_, e) => { if (e.ChangedButton == MouseButton.Left) DragMove(); };
@@ -75,10 +69,10 @@ public sealed class SettingsWindow : Window
             Text = "Settings",
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
-            Foreground = Brush("Brush.Text", Brushes.White),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(16, 0, 0, 0),
         };
+        titleText.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text");
         Grid.SetColumn(titleText, 0);
         titleBar.Children.Add(titleText);
 
@@ -96,12 +90,9 @@ public sealed class SettingsWindow : Window
         Grid.SetRow(body, 1);
         root.Children.Add(body);
 
-        var sidebar = new Border
-        {
-            Background = Brush("Brush.Surface", Brushes.DarkGray),
-            BorderBrush = Brush("Brush.Border", Brushes.Gray),
-            BorderThickness = new Thickness(0, 0, 1, 0),
-        };
+        var sidebar = new Border { BorderThickness = new Thickness(0, 0, 1, 0) };
+        sidebar.SetResourceReference(Border.BackgroundProperty, "Brush.Surface");
+        sidebar.SetResourceReference(Border.BorderBrushProperty, "Brush.Border");
         var nav = new StackPanel { Margin = new Thickness(0, 10, 0, 10) };
         sidebar.Child = nav;
         Grid.SetColumn(sidebar, 0);
@@ -164,8 +155,9 @@ public sealed class SettingsWindow : Window
         foreach (var (key, button) in _tabButtons)
         {
             bool active = key == name;
-            button.Background = active ? Brush("Brush.SurfaceAlt", Brushes.Gray) : Brushes.Transparent;
-            button.Foreground = active ? Brush("Brush.Text", Brushes.White) : Brush("Brush.Muted", Brushes.Gray);
+            if (active) button.SetResourceReference(Control.BackgroundProperty, "Brush.SurfaceAlt");
+            else button.Background = Brushes.Transparent;
+            button.SetResourceReference(Control.ForegroundProperty, active ? "Brush.Text" : "Brush.Muted");
         }
     }
 
@@ -201,8 +193,8 @@ public sealed class SettingsWindow : Window
         panel.Children.Add(themeRow);
 
         panel.Children.Add(Header("Fonts"));
-        panel.Children.Add(TextRow("Text font", _settings.FontFamily, value => { _settings.FontFamily = value; _onChange(); }));
-        panel.Children.Add(TextRow("Monospace font", _settings.MonospaceFontFamily, value => { _settings.MonospaceFontFamily = value; _onChange(); }));
+        panel.Children.Add(FontRow("Text font", _settings.FontFamily, value => { _settings.FontFamily = value; _onChange(); }));
+        panel.Children.Add(FontRow("Monospace font", _settings.MonospaceFontFamily, value => { _settings.MonospaceFontFamily = value; _onChange(); }));
         panel.Children.Add(SliderRow("Font size", _settings.FontSize, 9, 32, 0.5,
             value => { _settings.FontSize = value; _onChange(); }));
 
@@ -327,20 +319,44 @@ public sealed class SettingsWindow : Window
         Margin = new Thickness(0, 0, 0, 8),
     };
 
-    private FrameworkElement TextRow(string label, string initialValue, Action<string> onCommit)
+    private static FontFamily[]? _systemFonts;
+
+    /// <summary>A dropdown of the installed system font families, each previewed in its own typeface.
+    /// Nothing is bundled with the app — the list is whatever Windows already has.</summary>
+    private FrameworkElement FontRow(string label, string current, Action<string> onCommit)
     {
         var grid = LabeledRow(label, out var slot);
 
-        var box = new TextBox
+        _systemFonts ??= System.Windows.Media.Fonts.SystemFontFamilies
+            .OrderBy(f => f.Source, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var combo = new ComboBox
         {
-            Text = initialValue,
-            Style = (Style)FindResource("SettingsTextBox"),
+            Style = (Style)FindResource("SettingsComboBox"),
             Width = 260,
-            HorizontalAlignment = HorizontalAlignment.Right,
+            MaxDropDownHeight = 340,
+            ItemsSource = _systemFonts,
         };
-        box.LostFocus += (_, _) => onCommit(box.Text);
-        box.KeyDown += (_, e) => { if (e.Key == Key.Enter) { onCommit(box.Text); Keyboard.ClearFocus(); } };
-        slot.Children.Add(box);
+
+        // Render each family name in its own face so the list reads like a real font menu.
+        var itemStyle = new Style(typeof(ComboBoxItem));
+        itemStyle.Setters.Add(new Setter(Control.FontFamilyProperty, new System.Windows.Data.Binding()));
+        itemStyle.Setters.Add(new Setter(Control.FontSizeProperty, 13.5));
+        combo.ItemContainerStyle = itemStyle;
+
+        // The stored value can be a fallback list ("Cascadia Mono, Consolas, …"); pick the first
+        // token that is actually installed so the box reflects what the editor really renders with.
+        var tokens = current.Split(',').Select(t => t.Trim()).Where(t => t.Length > 0).ToArray();
+        combo.SelectedItem = _systemFonts.FirstOrDefault(
+            f => tokens.Any(t => string.Equals(f.Source, t, StringComparison.OrdinalIgnoreCase)));
+
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (combo.SelectedItem is FontFamily family) onCommit(family.Source);
+        };
+
+        slot.Children.Add(combo);
         return grid;
     }
 
@@ -367,8 +383,8 @@ public sealed class SettingsWindow : Window
             Value = initialValue,
             Width = 200,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = Brush("Brush.Accent", Brushes.Purple),
         };
+        slider.SetResourceReference(Control.ForegroundProperty, "Brush.Accent");
 
         bool syncing = false;
 
@@ -427,12 +443,12 @@ public sealed class SettingsWindow : Window
             Height = 22,
             CornerRadius = new CornerRadius(4),
             BorderThickness = new Thickness(1),
-            BorderBrush = Brush("Brush.Border", Brushes.Gray),
             Margin = new Thickness(0, 0, 8, 0),
             Background = SwatchBrush(get()),
             Cursor = Cursors.Hand,
             ToolTip = "Pick a colour",
         };
+        swatch.SetResourceReference(Border.BorderBrushProperty, "Brush.Border");
 
         var box = new TextBox
         {

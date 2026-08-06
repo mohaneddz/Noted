@@ -35,7 +35,7 @@
             </Grid.RowDefinitions>
 
             <!-- ============ title bar / tab strip ============ -->
-            <Grid Grid.Row="0" x:Name="TitleBar" Background="{DynamicResource Brush.Background}">
+            <Grid Grid.Row="0" x:Name="TitleBar" Background="{DynamicResource Brush.Surface}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
