@@ -19,6 +19,10 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
     private readonly MarkdownAnalyzer _analyzer;
     private readonly RevealTracker _reveal;
 
+    /// <summary>Clickable language-tag pills from the last <see cref="Draw"/>, in view coordinates,
+    /// each carrying the fenced block's line range so a click can copy it.</summary>
+    private readonly List<(Rect Rect, int Start, int End)> _languageTags = new();
+
     public BlockDecorationRenderer(MarkdownAnalyzer analyzer, RevealTracker reveal)
     {
         _analyzer = analyzer;
@@ -39,11 +43,30 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
 
     public KnownLayer Layer => KnownLayer.Background;
 
+    /// <summary>If <paramref name="point"/> (in view coordinates) lands on a language-tag pill,
+    /// returns the fenced block's inclusive line range.</summary>
+    public bool TryHitLanguageTag(Point point, out int startLine, out int endLine)
+    {
+        foreach (var (rect, start, end) in _languageTags)
+        {
+            if (rect.Contains(point))
+            {
+                startLine = start;
+                endLine = end;
+                return true;
+            }
+        }
+
+        startLine = endLine = 0;
+        return false;
+    }
+
     public void Draw(TextView textView, DrawingContext drawingContext)
     {
         if (textView.Document is null) return;
 
         textView.EnsureVisualLines();
+        _languageTags.Clear();
         if (textView.VisualLines.Count == 0) return;
 
         double right = ContentWidth > 0 ? Math.Min(ContentWidth, textView.ActualWidth) : textView.ActualWidth;
@@ -67,7 +90,8 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
                     _analyzer.TryGetCodeBlock(lineNumber, out int start, out int end, out string language) &&
                     lineNumber == start && language.Length > 0 && !_reveal.IsRangeRevealed(start, end))
                 {
-                    DrawLanguageTag(drawingContext, textView, language, top, right);
+                    var pill = DrawLanguageTag(drawingContext, textView, language, top, right);
+                    _languageTags.Add((pill, start, end));
                 }
             }
 
@@ -92,7 +116,7 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
         }
     }
 
-    private void DrawLanguageTag(DrawingContext drawingContext, TextView textView, string language, double top, double right)
+    private Rect DrawLanguageTag(DrawingContext drawingContext, TextView textView, string language, double top, double right)
     {
         double dpi = VisualTreeHelper.GetDpi(textView).PixelsPerDip;
         var text = new FormattedText(
@@ -113,6 +137,7 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
         var pill = new Rect(x, y, pillWidth, pillHeight);
         drawingContext.DrawRoundedRectangle(Theme.SurfaceAlt, null, pill, 5, 5);
         drawingContext.DrawText(text, new Point(x + paddingX, y + paddingY));
+        return pill;
     }
 
     /// <summary>X coordinate (view space) of a document offset relative to the line start.</summary>

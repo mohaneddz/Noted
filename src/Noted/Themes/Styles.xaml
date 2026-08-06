@@ -24,6 +24,7 @@
     <!-- ===================== buttons ===================== -->
 
     <Style x:Key="IconButton" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Muted}" />
         <Setter Property="BorderThickness" Value="0" />
@@ -102,6 +103,7 @@
     </Style>
 
     <Style x:Key="TabItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Margin" Value="0,0,3,0" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Muted}" />
@@ -134,6 +136,7 @@
     </Style>
 
     <Style TargetType="MenuItem" x:Key="AppMenuItem">
+        <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Padding" Value="10,6" />
@@ -358,6 +361,7 @@
     </Style>
 
     <Style x:Key="SettingsComboBox" TargetType="ComboBox">
+        <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Padding" Value="8,5" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}" />
@@ -367,6 +371,7 @@
 
     <!-- Default checkbox style used across the app -->
     <Style x:Key="AppCheckBox" TargetType="CheckBox">
+        <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="VerticalAlignment" Value="Center" />
@@ -409,6 +414,7 @@
 
     <!-- RadioButton counterpart of AppCheckBox/SettingsCheckBox, same visual language -->
     <Style x:Key="SettingsRadioButton" TargetType="RadioButton">
+        <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="VerticalAlignment" Value="Center" />

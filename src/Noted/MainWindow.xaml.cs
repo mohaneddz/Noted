@@ -110,6 +110,8 @@ public partial class MainWindow : Window
         Editor.TextChanged += OnEditorTextChanged;
         Editor.PreviewKeyDown += OnEditorPreviewKeyDown;
         Editor.PreviewMouseWheel += OnEditorPreviewMouseWheel;
+        textView.MouseMove += OnTextViewMouseMove;
+        textView.PreviewMouseLeftButtonDown += OnTextViewMouseLeftButtonDown;
 
         _searchPanel = SearchPanel.Install(Editor);
         _searchPanel.MarkerBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xF5, 0xC2, 0x42));
@@ -661,6 +663,48 @@ public partial class MainWindow : Window
         if (Keyboard.Modifiers != ModifierKeys.Control) return;
         Zoom(Math.Sign(e.Delta));
         e.Handled = true;
+    }
+
+    /// <summary>A hand cursor over a code-block's language tag hints that it copies the block.</summary>
+    private void OnTextViewMouseMove(object sender, MouseEventArgs e)
+    {
+        var textView = Editor.TextArea.TextView;
+        bool overTag = _decorations.TryHitLanguageTag(e.GetPosition(textView), out _, out _);
+        textView.Cursor = overTag ? Cursors.Hand : Cursors.IBeam;
+    }
+
+    private void OnTextViewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var textView = Editor.TextArea.TextView;
+        if (!_decorations.TryHitLanguageTag(e.GetPosition(textView), out int start, out int end)) return;
+
+        CopyCodeBlock(start, end);
+        e.Handled = true;
+    }
+
+    /// <summary>Copies the code inside a fenced block (the lines between its delimiters) to the clipboard.</summary>
+    private void CopyCodeBlock(int startLine, int endLine)
+    {
+        var document = Editor.Document;
+        if (document is null) return;
+
+        var lines = new List<string>();
+        for (int n = startLine + 1; n <= endLine - 1 && n <= document.LineCount; n++)
+        {
+            var line = document.GetLineByNumber(n);
+            lines.Add(document.GetText(line.Offset, line.Length));
+        }
+
+        try
+        {
+            Clipboard.SetText(string.Join(Environment.NewLine, lines));
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            return; // clipboard busy — nothing we can do, don't crash
+        }
+
+        StatusPath.Text = $"Copied {lines.Count} line{(lines.Count == 1 ? "" : "s")} of code";
     }
 
     private void RedrawLines(int fromLine, int toLine)

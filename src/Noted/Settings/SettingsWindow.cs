@@ -383,6 +383,7 @@ public sealed class SettingsWindow : Window
             Value = initialValue,
             Width = 200,
             VerticalAlignment = VerticalAlignment.Center,
+            Cursor = Cursors.Hand,
         };
         slider.SetResourceReference(Control.ForegroundProperty, "Brush.Accent");
 
