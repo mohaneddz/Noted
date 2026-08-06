@@ -25,6 +25,8 @@ public sealed class MarkdownAnalyzer
     private Setext[] _setext = [];
     private CalloutKind[] _callouts = [];
     private int[] _blockStart = [];
+    private int[] _mathStart = [];
+    private List<(int Start, int End)> _mathBlocks = [];
     private List<FenceBlock> _blocks = [];
     private bool _stale = true;
 
@@ -83,6 +85,32 @@ public sealed class MarkdownAnalyzer
         return false;
     }
 
+    /// <summary>Every <c>$$ … $$</c> display-math block in the document, as inclusive line ranges.</summary>
+    public IReadOnlyList<(int Start, int End)> MathBlocks()
+    {
+        if (_document is null) return [];
+        EnsureFresh();
+        return _mathBlocks;
+    }
+
+    /// <summary>If <paramref name="lineNumber"/> falls inside a <c>$$ … $$</c> display-math block,
+    /// returns the block's inclusive line range.</summary>
+    public bool TryGetMathBlock(int lineNumber, out int startLine, out int endLine)
+    {
+        startLine = endLine = 0;
+        if (_document is null) return false;
+        EnsureFresh();
+
+        if (lineNumber >= 1 && lineNumber < _mathStart.Length && _mathStart[lineNumber] > 0)
+        {
+            (startLine, endLine) = _mathBlocks[_mathStart[lineNumber] - 1];
+            return true;
+        }
+
+        startLine = endLine = 0;
+        return false;
+    }
+
     private MdLine ScanLine(int lineNumber)
     {
         var line = _document!.GetLineByNumber(lineNumber);
@@ -119,7 +147,9 @@ public sealed class MarkdownAnalyzer
         _setext = new Setext[lineCount + 1];
         _callouts = new CalloutKind[lineCount + 1];
         _blockStart = new int[lineCount + 1];
+        _mathStart = new int[lineCount + 1];
         _blocks = [];
+        _mathBlocks = [];
 
         bool inFence = false;
         char fenceChar = '`';
@@ -202,6 +232,36 @@ public sealed class MarkdownAnalyzer
 
             for (int m = n; m <= lineCount && _fences[m] == Fence.None && IsBlockquote(TextOf(m)); m++)
                 _callouts[m] = kind;
+        }
+
+        // Display math: $$ … $$ blocks (single- or multi-line), living outside code fences.
+        for (int n = 1; n <= lineCount; n++)
+        {
+            if (_fences[n] != Fence.None) continue;
+            string t = TextOf(n).Trim();
+            if (!t.StartsWith("$$", StringComparison.Ordinal)) continue;
+
+            if (t.Length >= 4 && t.EndsWith("$$", StringComparison.Ordinal))
+            {
+                AddMathBlock(n, n);
+                continue;
+            }
+
+            int m = n + 1;
+            while (m <= lineCount && _fences[m] == Fence.None && !TextOf(m).Trim().EndsWith("$$", StringComparison.Ordinal))
+                m++;
+            if (m <= lineCount && _fences[m] == Fence.None && TextOf(m).Trim().EndsWith("$$", StringComparison.Ordinal))
+            {
+                AddMathBlock(n, m);
+                n = m;
+            }
+        }
+
+        void AddMathBlock(int start, int end)
+        {
+            _mathBlocks.Add((start, end));
+            int index = _mathBlocks.Count;
+            for (int k = start; k <= end; k++) _mathStart[k] = index;
         }
 
         // An unclosed fence still gets a block, running to the end of the document.

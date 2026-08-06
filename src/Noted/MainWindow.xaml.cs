@@ -34,7 +34,9 @@ public partial class MainWindow : Window
     private readonly MarkdownElementGenerator _generator;
     private readonly EmojiElementGenerator _emoji;
     private readonly InlineMathElementGenerator _inlineMath;
+    private readonly BlockMathElementGenerator _blockMath;
     private readonly ImageElementGenerator _images = new();
+    private BlockCollapser _collapser = null!;
     private readonly BlockDecorationRenderer _decorations;
     private readonly DispatcherTimer _statusTimer;
     private readonly DispatcherTimer _autoSaveTimer;
@@ -63,6 +65,7 @@ public partial class MainWindow : Window
         _generator = new MarkdownElementGenerator(_analyzer, _reveal);
         _emoji = new EmojiElementGenerator(_analyzer, _reveal);
         _inlineMath = new InlineMathElementGenerator(_analyzer, _reveal);
+        _blockMath = new BlockMathElementGenerator(_analyzer, _reveal);
         _decorations = new BlockDecorationRenderer(_analyzer, _reveal);
 
         _statusTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -98,10 +101,14 @@ public partial class MainWindow : Window
         textView.LineTransformers.Add(_colorizer);
         // Images first: they claim the whole ![](…) span before the marker generator can pick at it.
         textView.ElementGenerators.Add(_images);
+        // Block math collapses whole $$…$$ ranges, so it must claim the span before line-local generators.
+        textView.ElementGenerators.Add(_blockMath);
         textView.ElementGenerators.Add(_generator);
         textView.ElementGenerators.Add(_emoji);
         textView.ElementGenerators.Add(_inlineMath);
         textView.BackgroundRenderers.Add(_decorations);
+
+        _collapser = new BlockCollapser(textView, [_blockMath]);
 
         DataObject.AddPastingHandler(Editor, OnEditorPaste);
 
@@ -435,6 +442,7 @@ public partial class MainWindow : Window
         _switchingTabs = true;
         _active = note;
 
+        _collapser?.Clear();   // drop folds tied to the old document before swapping it out
         Editor.Document = note?.Document;
         _analyzer.Attach(note?.Document);
 
@@ -446,6 +454,7 @@ public partial class MainWindow : Window
 
         _switchingTabs = false;
 
+        _collapser?.Update();
         Editor.TextArea.TextView.Redraw();
         UpdateStatusBar();
         Title = note is null ? "Noted" : $"{note.Title} — Noted";
@@ -662,6 +671,9 @@ public partial class MainWindow : Window
     {
         if (_switchingTabs) return;
 
+        // Editing can add, remove or resize a $$…$$ / table / diagram block, so re-sync the folds.
+        _collapser.Update();
+
         ScheduleStatusUpdate();
         ScheduleAutoSave();
         if (_active is not null) Title = $"{_active.Title} — Noted";
@@ -841,6 +853,9 @@ public partial class MainWindow : Window
         var document = Editor.Document;
         if (document is null) return;
 
+        // A caret crossing a block edge changes whether that block is folded; sync before repainting.
+        _collapser.Update();
+
         // A caret crossing into or out of a fenced code block changes how the whole block
         // looks (its fence lines, its language tag), not just the line the caret landed on.
         if (_analyzer.TryGetCodeBlock(fromLine, out int s1, out int e1, out _))
@@ -852,6 +867,15 @@ public partial class MainWindow : Window
         {
             fromLine = Math.Min(fromLine, s2);
             toLine = Math.Max(toLine, e2);
+        }
+
+        // Collapsing blocks (display math, and later tables/diagrams) add or remove whole visual
+        // lines when the caret crosses their edge, so a per-line redraw can't reconcile the layout —
+        // repaint everything in that case.
+        if (_analyzer.TryGetMathBlock(fromLine, out _, out _) || _analyzer.TryGetMathBlock(toLine, out _, out _))
+        {
+            Editor.TextArea.TextView.Redraw(DispatcherPriority.Render);
+            return;
         }
 
         var textView = Editor.TextArea.TextView;
@@ -886,6 +910,8 @@ public partial class MainWindow : Window
         _emoji.HideMarkers = _settings.LiveMarkdown;
         _inlineMath.HideMarkers = _settings.LiveMarkdown;
         _inlineMath.Theme = theme;
+        _blockMath.HideMarkers = _settings.LiveMarkdown;
+        _blockMath.Theme = theme;
         _images.HideMarkers = _settings.LiveMarkdown;
         _reveal.Enabled = _settings.LiveMarkdown;
         _decorations.Theme = theme;
@@ -919,6 +945,9 @@ public partial class MainWindow : Window
 
         ThemeButton.Content = _settings.Theme == AppTheme.Dark ? "\uE706" : "\uE708";
 
+        if (_settings.LiveMarkdown) _collapser?.Update();
+        else _collapser?.Clear();
+
         Editor.TextArea.TextView.Redraw();
         UpdateReadingWidth();
         UpdateStatusBar();
@@ -948,6 +977,7 @@ public partial class MainWindow : Window
             Math.Max(0, side - pageInset), 0, Math.Max(0, rightSide - pageInset), 0);
 
         _decorations.ContentWidth = Math.Max(120, available - side * 1.6);
+        _blockMath.ContentWidth = Math.Max(120, available - side - rightSide);
         _images.MaxWidth = Math.Max(120, available - side - rightSide);
         Editor.TextArea.TextView.InvalidateLayer(ICSharpCode.AvalonEdit.Rendering.KnownLayer.Background);
 
