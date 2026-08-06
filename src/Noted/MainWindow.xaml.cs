@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private readonly MarkdownColorizer _colorizer;
     private readonly MarkdownElementGenerator _generator;
     private readonly EmojiElementGenerator _emoji;
+    private readonly InlineMathElementGenerator _inlineMath;
     private readonly ImageElementGenerator _images = new();
     private readonly BlockDecorationRenderer _decorations;
     private readonly DispatcherTimer _statusTimer;
@@ -61,6 +62,7 @@ public partial class MainWindow : Window
         _colorizer = new MarkdownColorizer(_analyzer, _reveal);
         _generator = new MarkdownElementGenerator(_analyzer, _reveal);
         _emoji = new EmojiElementGenerator(_analyzer, _reveal);
+        _inlineMath = new InlineMathElementGenerator(_analyzer, _reveal);
         _decorations = new BlockDecorationRenderer(_analyzer, _reveal);
 
         _statusTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -98,6 +100,7 @@ public partial class MainWindow : Window
         textView.ElementGenerators.Add(_images);
         textView.ElementGenerators.Add(_generator);
         textView.ElementGenerators.Add(_emoji);
+        textView.ElementGenerators.Add(_inlineMath);
         textView.BackgroundRenderers.Add(_decorations);
 
         DataObject.AddPastingHandler(Editor, OnEditorPaste);
@@ -881,6 +884,8 @@ public partial class MainWindow : Window
         _generator.Theme = theme;
         _generator.HideMarkers = _settings.LiveMarkdown;
         _emoji.HideMarkers = _settings.LiveMarkdown;
+        _inlineMath.HideMarkers = _settings.LiveMarkdown;
+        _inlineMath.Theme = theme;
         _images.HideMarkers = _settings.LiveMarkdown;
         _reveal.Enabled = _settings.LiveMarkdown;
         _decorations.Theme = theme;
