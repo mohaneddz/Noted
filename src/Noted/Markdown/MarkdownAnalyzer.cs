@@ -13,6 +13,8 @@ public sealed class MarkdownAnalyzer
 
     private enum TableRole : byte { None, Header, Delimiter, Row }
 
+    private enum Setext : byte { None, Heading1, Heading2, Underline }
+
     /// <summary>One fenced code block, from its opening delimiter line to its closing one.</summary>
     private readonly record struct FenceBlock(int StartLine, int EndLine, string Language);
 
@@ -20,6 +22,7 @@ public sealed class MarkdownAnalyzer
     private MdLine?[] _cache = [];
     private Fence[] _fences = [];
     private TableRole[] _tables = [];
+    private Setext[] _setext = [];
     private int[] _blockStart = [];
     private List<FenceBlock> _blocks = [];
     private bool _stale = true;
@@ -87,6 +90,13 @@ public sealed class MarkdownAnalyzer
         if (_fences[lineNumber] == Fence.Delimiter) return MarkdownScanner.ScanFenceDelimiter(text);
         if (_fences[lineNumber] == Fence.Inside) return MarkdownScanner.ScanFencedContent(text);
 
+        switch (_setext[lineNumber])
+        {
+            case Setext.Heading1: return MarkdownScanner.ScanSetextHeading(text, 1);
+            case Setext.Heading2: return MarkdownScanner.ScanSetextHeading(text, 2);
+            case Setext.Underline: return MarkdownScanner.ScanSetextUnderline(text);
+        }
+
         return _tables[lineNumber] switch
         {
             TableRole.Header => MarkdownScanner.ScanTableRow(text, header: true),
@@ -105,6 +115,7 @@ public sealed class MarkdownAnalyzer
         _cache = new MdLine?[lineCount + 1];
         _fences = new Fence[lineCount + 1];
         _tables = new TableRole[lineCount + 1];
+        _setext = new Setext[lineCount + 1];
         _blockStart = new int[lineCount + 1];
         _blocks = [];
 
@@ -157,6 +168,17 @@ public sealed class MarkdownAnalyzer
                 {
                     _tables[n] = TableRole.Row;
                 }
+            }
+
+            // Setext headings: a run of '=' (h1) or '-' (h2) directly under a plain paragraph line
+            // turns that paragraph into a heading and itself into the heading's underline rule.
+            if (_fences[n] == Fence.None && _tables[n] == TableRole.None && _setext[n] == Setext.None &&
+                n > 1 && _fences[n - 1] == Fence.None && _tables[n - 1] == TableRole.None &&
+                _setext[n - 1] == Setext.None && SetextUnderlineLevel(TextOf(n)) is int level &&
+                IsPlainParagraph(TextOf(n - 1)))
+            {
+                _setext[n - 1] = level == 1 ? Setext.Heading1 : Setext.Heading2;
+                _setext[n] = Setext.Underline;
             }
         }
 
@@ -217,6 +239,32 @@ public sealed class MarkdownAnalyzer
 
         if (cellHasContent && !sawDashInCell) return false;
         return sawPipe && sawDashOverall;
+    }
+
+    /// <summary>Returns 1 for a <c>===</c> underline, 2 for a <c>---</c> underline, or null if the line
+    /// is not a pure run of a single setext underline character.</summary>
+    private static int? SetextUnderlineLevel(string text)
+    {
+        int i = 0, end = text.Length;
+        while (end > i && (text[end - 1] == ' ' || text[end - 1] == '\t')) end--;
+        while (i < end && (text[i] == ' ' || text[i] == '\t')) i++;
+        if (i >= end) return null;
+
+        char c = text[i];
+        if (c != '=' && c != '-') return null;
+        for (int k = i; k < end; k++)
+            if (text[k] != c) return null;
+
+        return c == '=' ? 1 : 2;
+    }
+
+    /// <summary>True if the line reads as ordinary paragraph prose — the only thing a setext underline
+    /// may attach to (not a heading, list, quote, rule, table or blank line).</summary>
+    private static bool IsPlainParagraph(string text)
+    {
+        if (text.Trim().Length == 0) return false;
+        var info = MarkdownScanner.Scan(text);
+        return info.Block == MdStyle.None && info.HeadingLevel == 0;
     }
 
     /// <summary>True if the line has visible text and at least one unescaped pipe — the shape of a table row.</summary>

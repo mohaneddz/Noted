@@ -158,6 +158,39 @@ public class MarkdownAnalyzerTests
         Assert.Equal(MdStyle.None, analyzer.GetLine(2).Block & MdStyle.Table);
     }
 
+    // ---------------- setext headings ----------------
+
+    [Theory]
+    [InlineData("=====", 1)]
+    [InlineData("-----", 2)]
+    public void ParagraphAboveASetextUnderlineBecomesAHeading(string underline, int level)
+    {
+        var analyzer = AnalyzerFor($"Alt Heading\n{underline}\n\nbody");
+
+        Assert.Equal(level, analyzer.GetLine(1).HeadingLevel);
+        Assert.True((analyzer.GetLine(1).Block & MdStyle.Heading) != 0);
+        Assert.True((analyzer.GetLine(2).Block & MdStyle.Rule) != 0);   // underline drawn as a rule
+        Assert.Equal(0, analyzer.GetLine(4).HeadingLevel);
+    }
+
+    [Fact]
+    public void DashesAfterABlankLineStayAThematicBreakNotASetextHeading()
+    {
+        var analyzer = AnalyzerFor("intro\n\n---\n\nmore");
+
+        Assert.Equal(0, analyzer.GetLine(1).HeadingLevel);   // blank line between, so no setext
+        Assert.True((analyzer.GetLine(3).Block & MdStyle.Rule) != 0);
+    }
+
+    [Fact]
+    public void SetextUnderlineDoesNotAttachToAHeadingOrListLine()
+    {
+        var analyzer = AnalyzerFor("# ATX heading\n---");
+
+        Assert.Equal(1, analyzer.GetLine(1).HeadingLevel);   // stays an ATX h1, not reinterpreted
+        Assert.True((analyzer.GetLine(2).Block & MdStyle.Rule) != 0);
+    }
+
     [Fact]
     public void SeparateFencesAreSeparateBlocks()
     {

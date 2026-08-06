@@ -98,6 +98,45 @@ public static class MarkdownScanner
         };
     }
 
+    /// <summary>
+    /// The text line of a setext heading (the line sitting above a <c>===</c> or <c>---</c> rule).
+    /// Its prose is parsed for inline markup and the whole line is flagged as a heading of the
+    /// given level so the colorizer weights and scales it like an ATX heading.
+    /// </summary>
+    public static MdLine ScanSetextHeading(string line, int level)
+    {
+        var tokens = new List<MdToken>(8);
+        int i = SkipWhitespace(line, 0);
+        ParseInline(line, i, line.Length, MdStyle.None, tokens, 0);
+
+        return new MdLine
+        {
+            Block = MdStyle.Heading,
+            HeadingLevel = level,
+            ContentStart = i,
+            Tokens = tokens,
+        };
+    }
+
+    /// <summary>The <c>===</c>/<c>---</c> underline of a setext heading: drawn as a rule beneath the text.</summary>
+    public static MdLine ScanSetextUnderline(string line)
+    {
+        int i = SkipWhitespace(line, 0);
+        int end = line.Length;
+        while (end > i && (line[end - 1] == ' ' || line[end - 1] == '\t')) end--;
+
+        var tokens = new List<MdToken>(1);
+        if (end > i) tokens.Add(new MdToken(i, end - i, MdStyle.Marker | MdStyle.Rule | MdStyle.Heading));
+
+        return new MdLine
+        {
+            Block = MdStyle.Rule | MdStyle.Heading,
+            ContentStart = i,
+            Tokens = tokens,
+            AllMarkers = true,
+        };
+    }
+
     public static MdLine Scan(string line)
     {
         if (line.Length == 0) return MdLine.Empty;
