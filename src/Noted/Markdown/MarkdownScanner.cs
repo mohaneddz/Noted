@@ -507,6 +507,46 @@ public static class MarkdownScanner
         return true;
     }
 
+    /// <summary>Splits a table row into its cell texts, honouring <c>\|</c> escapes and dropping the empty
+    /// cells produced by optional leading/trailing pipes. Cell text keeps its escapes for the inline parser.</summary>
+    public static List<string> SplitTableCells(string line)
+    {
+        var cells = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '\\' && i + 1 < line.Length) { sb.Append(c).Append(line[i + 1]); i++; continue; }
+            if (c == '|') { cells.Add(sb.ToString()); sb.Clear(); continue; }
+            sb.Append(c);
+        }
+        cells.Add(sb.ToString());
+
+        if (cells.Count > 0 && cells[0].Trim().Length == 0) cells.RemoveAt(0);
+        if (cells.Count > 0 && cells[^1].Trim().Length == 0) cells.RemoveAt(cells.Count - 1);
+        return cells;
+    }
+
+    /// <summary>Reads a table's per-column alignment from its <c>:---</c> / <c>:--:</c> / <c>---:</c> delimiter row.</summary>
+    public static ColumnAlign[] ParseColumnAligns(string delimiter)
+    {
+        var cells = SplitTableCells(delimiter);
+        var result = new ColumnAlign[cells.Count];
+        for (int i = 0; i < cells.Count; i++)
+        {
+            string c = cells[i].Trim();
+            bool left = c.StartsWith(':'), right = c.EndsWith(':');
+            result[i] = (left, right) switch
+            {
+                (true, true) => ColumnAlign.Center,
+                (true, false) => ColumnAlign.Left,
+                (false, true) => ColumnAlign.Right,
+                _ => ColumnAlign.None,
+            };
+        }
+        return result;
+    }
+
     /// <summary>Normalises a reference label for matching: trim, collapse internal whitespace, case-fold.</summary>
     public static string NormalizeReferenceLabel(string label)
     {

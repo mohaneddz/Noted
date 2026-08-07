@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     private readonly InlineMathElementGenerator _inlineMath;
     private readonly BlockMathElementGenerator _blockMath;
     private readonly DetailsElementGenerator _details;
+    private readonly TableElementGenerator _tables;
     private readonly ImageElementGenerator _images = new();
     private BlockCollapser _collapser = null!;
     private readonly BlockDecorationRenderer _decorations;
@@ -68,6 +69,7 @@ public partial class MainWindow : Window
         _inlineMath = new InlineMathElementGenerator(_analyzer, _reveal);
         _blockMath = new BlockMathElementGenerator(_analyzer, _reveal);
         _details = new DetailsElementGenerator(_analyzer, _reveal);
+        _tables = new TableElementGenerator(_analyzer, _reveal);
         _decorations = new BlockDecorationRenderer(_analyzer, _reveal);
 
         _statusTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -109,12 +111,14 @@ public partial class MainWindow : Window
         // Details fold whole <details>…</details> ranges into a chip; also claim before line-local generators.
         _details.RequestReveal = RevealAtOffset;
         textView.ElementGenerators.Add(_details);
+        // Tables collapse whole ranges into an aligned grid; claim the span before line-local generators.
+        textView.ElementGenerators.Add(_tables);
         textView.ElementGenerators.Add(_generator);
         textView.ElementGenerators.Add(_emoji);
         textView.ElementGenerators.Add(_inlineMath);
         textView.BackgroundRenderers.Add(_decorations);
 
-        _collapser = new BlockCollapser(textView, [_blockMath, _details]);
+        _collapser = new BlockCollapser(textView, [_blockMath, _details, _tables]);
 
         DataObject.AddPastingHandler(Editor, OnEditorPaste);
 
@@ -892,7 +896,9 @@ public partial class MainWindow : Window
         // repaint everything in that case.
         if (_analyzer.TryGetMathBlock(fromLine, out _, out _) || _analyzer.TryGetMathBlock(toLine, out _, out _) ||
             _analyzer.TryGetDetailsBlock(fromLine, out _, out _, out _) ||
-            _analyzer.TryGetDetailsBlock(toLine, out _, out _, out _))
+            _analyzer.TryGetDetailsBlock(toLine, out _, out _, out _) ||
+            _analyzer.TryGetTableBlock(fromLine, out _, out _, out _) ||
+            _analyzer.TryGetTableBlock(toLine, out _, out _, out _))
         {
             Editor.TextArea.TextView.Redraw(DispatcherPriority.Render);
             return;
@@ -934,6 +940,9 @@ public partial class MainWindow : Window
         _blockMath.Theme = theme;
         _details.HideMarkers = _settings.LiveMarkdown;
         _details.Theme = theme;
+        _tables.HideMarkers = _settings.LiveMarkdown;
+        _tables.Theme = theme;
+        _tables.MonospaceFont = new FontFamily(_settings.MonospaceFontFamily);
         _images.HideMarkers = _settings.LiveMarkdown;
         _reveal.Enabled = _settings.LiveMarkdown;
         _decorations.Theme = theme;
@@ -1000,6 +1009,7 @@ public partial class MainWindow : Window
 
         _decorations.ContentWidth = Math.Max(120, available - side * 1.6);
         _blockMath.ContentWidth = Math.Max(120, available - side - rightSide);
+        _tables.ContentWidth = Math.Max(120, available - side - rightSide);
         _images.MaxWidth = Math.Max(120, available - side - rightSide);
         Editor.TextArea.TextView.InvalidateLayer(ICSharpCode.AvalonEdit.Rendering.KnownLayer.Background);
 

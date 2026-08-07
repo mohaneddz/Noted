@@ -97,6 +97,35 @@ public sealed class MarkdownAnalyzer
         return false;
     }
 
+    /// <summary>Every table in the document, as (header, end) inclusive line ranges.</summary>
+    public IEnumerable<(int Start, int End)> TableBlocks()
+    {
+        if (_document is null) yield break;
+        EnsureFresh();
+        foreach (var block in _tableBlocks) yield return (block.HeaderLine, block.EndLine);
+    }
+
+    /// <summary>If <paramref name="lineNumber"/> falls inside a table, returns its header line, its last
+    /// body line, and one alignment per column.</summary>
+    public bool TryGetTableBlock(int lineNumber, out int headerLine, out int endLine, out ColumnAlign[] aligns)
+    {
+        headerLine = endLine = 0;
+        aligns = [];
+        if (_document is null) return false;
+        EnsureFresh();
+
+        if (lineNumber >= 1 && lineNumber < _tableStart.Length && _tableStart[lineNumber] > 0)
+        {
+            var block = _tableBlocks[_tableStart[lineNumber] - 1];
+            headerLine = block.HeaderLine;
+            endLine = block.EndLine;
+            aligns = block.Aligns;
+            return true;
+        }
+
+        return false;
+    }
+
     /// <summary>Every <c>&lt;details&gt;</c> block, as (start, end) inclusive line ranges.</summary>
     public IEnumerable<(int Start, int End)> DetailsBlocks()
     {
@@ -293,6 +322,24 @@ public sealed class MarkdownAnalyzer
                 _refDef[n] = true;
                 _refLabels.Add(MarkdownScanner.NormalizeReferenceLabel(label));
             }
+        }
+
+        // Group the per-line table roles into whole-table blocks, capturing each table's column
+        // alignment from its delimiter row, so a table can be rendered as one aligned grid.
+        for (int n = 1; n <= lineCount; n++)
+        {
+            if (_tables[n] != TableRole.Header) continue;
+
+            int delimiter = n + 1;
+            var aligns = delimiter <= lineCount ? MarkdownScanner.ParseColumnAligns(TextOf(delimiter)) : [];
+
+            int end = delimiter;
+            for (int r = delimiter + 1; r <= lineCount && _tables[r] == TableRole.Row; r++) end = r;
+
+            _tableBlocks.Add(new TableBlock(n, end, aligns));
+            int index = _tableBlocks.Count;
+            for (int k = n; k <= end; k++) _tableStart[k] = index;
+            n = end;
         }
 
         // HTML <details> disclosure blocks: fold everything from <details> to </details> into a
