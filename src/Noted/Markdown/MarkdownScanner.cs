@@ -58,7 +58,7 @@ public static class MarkdownScanner
     /// usual inline markup so bold, code and links work inside cells. The header row is flagged so
     /// the colorizer can weight it.
     /// </summary>
-    public static MdLine ScanTableRow(string line, bool header)
+    public static MdLine ScanTableRow(string line, bool header, IReadOnlySet<string>? refs = null)
     {
         var tokens = new List<MdToken>(8);
         int i = SkipWhitespace(line, 0);
@@ -78,7 +78,7 @@ public static class MarkdownScanner
         for (int k = 0; k < pipes.Count; k++)
         {
             int pipe = pipes[k];
-            if (pipe > cellStart) ParseInline(line, cellStart, pipe, MdStyle.None, tokens, 0);
+            if (pipe > cellStart) ParseInline(line, cellStart, pipe, MdStyle.None, tokens, 0, refs);
 
             bool leadingEdge = k == 0 && pipe == i;
             bool trailingEdge = k == pipes.Count - 1 && pipe == trimmedEnd - 1;
@@ -86,7 +86,7 @@ public static class MarkdownScanner
             tokens.Add(new MdToken(pipe, 1, style));
             cellStart = pipe + 1;
         }
-        if (cellStart < line.Length) ParseInline(line, cellStart, line.Length, MdStyle.None, tokens, 0);
+        if (cellStart < line.Length) ParseInline(line, cellStart, line.Length, MdStyle.None, tokens, 0, refs);
 
         tokens.Sort((a, b) => a.Offset.CompareTo(b.Offset));
 
@@ -103,11 +103,11 @@ public static class MarkdownScanner
     /// Its prose is parsed for inline markup and the whole line is flagged as a heading of the
     /// given level so the colorizer weights and scales it like an ATX heading.
     /// </summary>
-    public static MdLine ScanSetextHeading(string line, int level)
+    public static MdLine ScanSetextHeading(string line, int level, IReadOnlySet<string>? refs = null)
     {
         var tokens = new List<MdToken>(8);
         int i = SkipWhitespace(line, 0);
-        ParseInline(line, i, line.Length, MdStyle.None, tokens, 0);
+        ParseInline(line, i, line.Length, MdStyle.None, tokens, 0, refs);
 
         return new MdLine
         {
@@ -137,7 +137,7 @@ public static class MarkdownScanner
         };
     }
 
-    public static MdLine Scan(string line)
+    public static MdLine Scan(string line, IReadOnlySet<string>? refs = null)
     {
         if (line.Length == 0) return MdLine.Empty;
 
@@ -240,7 +240,7 @@ public static class MarkdownScanner
             }
         }
 
-        ParseInline(line, i, line.Length, MdStyle.None, tokens, 0);
+        ParseInline(line, i, line.Length, MdStyle.None, tokens, 0, refs);
 
         bool allMarkers = true;
         int covered = 0;
@@ -266,7 +266,8 @@ public static class MarkdownScanner
 
     private const int MaxInlineDepth = 8;
 
-    private static void ParseInline(string s, int start, int end, MdStyle inherit, List<MdToken> output, int depth)
+    private static void ParseInline(string s, int start, int end, MdStyle inherit, List<MdToken> output, int depth,
+        IReadOnlySet<string>? refs = null)
     {
         if (start >= end) return;
         if (depth > MaxInlineDepth)
@@ -328,7 +329,7 @@ public static class MarkdownScanner
                     };
                     Flush(i);
                     output.Add(new MdToken(i, run, MdStyle.Marker | inherit | emphasis));
-                    ParseInline(s, i + run, close, inherit | emphasis, output, depth + 1);
+                    ParseInline(s, i + run, close, inherit | emphasis, output, depth + 1, refs);
                     output.Add(new MdToken(close, run, MdStyle.Marker | inherit | emphasis));
                     i = close + run;
                     plain = i;
@@ -341,7 +342,7 @@ public static class MarkdownScanner
                     if (close < 0) break;
                     Flush(i);
                     output.Add(new MdToken(i, 2, MdStyle.Marker | inherit | MdStyle.Strike));
-                    ParseInline(s, i + 2, close, inherit | MdStyle.Strike, output, depth + 1);
+                    ParseInline(s, i + 2, close, inherit | MdStyle.Strike, output, depth + 1, refs);
                     output.Add(new MdToken(close, 2, MdStyle.Marker | inherit | MdStyle.Strike));
                     i = close + 2;
                     plain = i;
@@ -354,7 +355,7 @@ public static class MarkdownScanner
                     if (close < 0) break;
                     Flush(i);
                     output.Add(new MdToken(i, 2, MdStyle.Marker | inherit | MdStyle.Highlight));
-                    ParseInline(s, i + 2, close, inherit | MdStyle.Highlight, output, depth + 1);
+                    ParseInline(s, i + 2, close, inherit | MdStyle.Highlight, output, depth + 1, refs);
                     output.Add(new MdToken(close, 2, MdStyle.Marker | inherit | MdStyle.Highlight));
                     i = close + 2;
                     plain = i;
@@ -378,7 +379,8 @@ public static class MarkdownScanner
                 case '[':
                 {
                     Flush(i);
-                    if (TryParseLink(s, i, end, inherit, output, depth, out int linkEnd))
+                    if (TryParseLink(s, i, end, inherit, output, depth, refs, out int linkEnd) ||
+                        TryParseReference(s, i, end, inherit, output, depth, refs, out linkEnd))
                     {
                         i = linkEnd;
                         plain = i;
@@ -409,7 +411,7 @@ public static class MarkdownScanner
     }
 
     private static bool TryParseLink(
-        string s, int i, int end, MdStyle inherit, List<MdToken> output, int depth, out int linkEnd)
+        string s, int i, int end, MdStyle inherit, List<MdToken> output, int depth, IReadOnlySet<string>? refs, out int linkEnd)
     {
         linkEnd = i;
         int bang = s[i] == '!' ? 1 : 0;
@@ -426,11 +428,114 @@ public static class MarkdownScanner
 
         output.Add(new MdToken(i, open + 1 - i, MdStyle.Marker | MdStyle.Link));
         if (labelEnd > open + 1)
-            ParseInline(s, open + 1, labelEnd, linkStyle, output, depth + 1);
+            ParseInline(s, open + 1, labelEnd, linkStyle, output, depth + 1, refs);
         output.Add(new MdToken(labelEnd, urlEnd + 1 - labelEnd, MdStyle.Marker | MdStyle.Url));
 
         linkEnd = urlEnd + 1;
         return true;
+    }
+
+    /// <summary>Parses a reference link/image: full <c>[text][id]</c>, collapsed <c>[text][]</c>, or shortcut
+    /// <c>[id]</c> — but only when <paramref name="id"/> matches a known reference definition, so ordinary
+    /// bracketed prose is left alone. The visible label shows as a link; the <c>[id]</c> tail is hidden.</summary>
+    private static bool TryParseReference(
+        string s, int i, int end, MdStyle inherit, List<MdToken> output, int depth, IReadOnlySet<string>? refs, out int linkEnd)
+    {
+        linkEnd = i;
+        if (refs is null || refs.Count == 0) return false;
+
+        int bang = s[i] == '!' ? 1 : 0;
+        int open = i + bang;
+        if (open >= end || s[open] != '[') return false;
+
+        int labelEnd = MatchBracket(s, open, end, '[', ']');
+        if (labelEnd < 0) return false;
+
+        string text = s.Substring(open + 1, labelEnd - (open + 1));
+
+        string refId;
+        int constructEnd;   // exclusive end of the whole reference
+        if (labelEnd + 1 < end && s[labelEnd + 1] == '[')
+        {
+            int secondEnd = MatchBracket(s, labelEnd + 1, end, '[', ']');
+            if (secondEnd < 0) return false;
+            string second = s.Substring(labelEnd + 2, secondEnd - (labelEnd + 2));
+            refId = second.Trim().Length == 0 ? text : second;   // collapsed [text][] reuses the text
+            constructEnd = secondEnd + 1;
+        }
+        else
+        {
+            if (labelEnd + 1 < end && s[labelEnd + 1] == '(') return false;   // an inline link, handled elsewhere
+            refId = text;                                                     // shortcut [id]
+            constructEnd = labelEnd + 1;
+        }
+
+        if (text.Trim().Length == 0 || !refs.Contains(NormalizeReferenceLabel(refId))) return false;
+
+        var linkStyle = inherit | MdStyle.Link | (bang == 1 ? MdStyle.Image : MdStyle.None);
+        output.Add(new MdToken(i, open + 1 - i, MdStyle.Marker | MdStyle.Link));       // "[" or "!["
+        ParseInline(s, open + 1, labelEnd, linkStyle, output, depth + 1, refs);        // the shown label
+        output.Add(new MdToken(labelEnd, constructEnd - labelEnd, MdStyle.Marker | MdStyle.Url));  // "]" (+ "[id]")
+
+        linkEnd = constructEnd;
+        return true;
+    }
+
+    /// <summary>If the line is a link reference definition (<c>[label]: destination</c>), returns its raw label.
+    /// Footnote definitions (<c>[^id]:</c>) are excluded.</summary>
+    public static bool TryReadReferenceDefinition(string line, out string label)
+    {
+        label = string.Empty;
+        int i = SkipWhitespace(line, 0);
+        if (i >= line.Length || line[i] != '[') return false;
+        if (i + 1 < line.Length && line[i + 1] == '^') return false;
+
+        int close = -1;
+        for (int k = i + 1; k < line.Length; k++)
+        {
+            if (line[k] == '\\') { k++; continue; }
+            if (line[k] == '[') return false;
+            if (line[k] == ']') { close = k; break; }
+        }
+        if (close <= i + 1) return false;                                 // empty label
+
+        int colon = close + 1;
+        if (colon >= line.Length || line[colon] != ':') return false;
+        if (SkipWhitespace(line, colon + 1) >= line.Length) return false; // needs a destination
+
+        label = line.Substring(i + 1, close - (i + 1));
+        return true;
+    }
+
+    /// <summary>Normalises a reference label for matching: trim, collapse internal whitespace, case-fold.</summary>
+    public static string NormalizeReferenceLabel(string label)
+    {
+        var sb = new System.Text.StringBuilder(label.Length);
+        bool pendingSpace = false;
+        foreach (char ch in label.Trim())
+        {
+            if (char.IsWhiteSpace(ch)) { pendingSpace = true; continue; }
+            if (pendingSpace && sb.Length > 0) sb.Append(' ');
+            pendingSpace = false;
+            sb.Append(char.ToLowerInvariant(ch));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Styles a link reference definition line so it recedes as dim metadata.</summary>
+    public static MdLine ScanReferenceDefinition(string line)
+    {
+        int i = SkipWhitespace(line, 0);
+        var tokens = new List<MdToken>(1);
+        if (line.Length > i)
+            tokens.Add(new MdToken(i, line.Length - i, MdStyle.Marker | MdStyle.Url));
+
+        return new MdLine
+        {
+            ContentStart = i,
+            Tokens = tokens,
+            AllMarkers = true,
+        };
     }
 
     private static void Emit(List<MdToken> output, int offset, int length, MdStyle style)

@@ -24,6 +24,8 @@ public sealed class MarkdownAnalyzer
     private TableRole[] _tables = [];
     private Setext[] _setext = [];
     private CalloutKind[] _callouts = [];
+    private bool[] _refDef = [];
+    private HashSet<string> _refLabels = new(StringComparer.Ordinal);
     private int[] _blockStart = [];
     private int[] _mathStart = [];
     private List<(int Start, int End)> _mathBlocks = [];
@@ -126,17 +128,19 @@ public sealed class MarkdownAnalyzer
 
         switch (_setext[lineNumber])
         {
-            case Setext.Heading1: return MarkdownScanner.ScanSetextHeading(text, 1);
-            case Setext.Heading2: return MarkdownScanner.ScanSetextHeading(text, 2);
+            case Setext.Heading1: return MarkdownScanner.ScanSetextHeading(text, 1, _refLabels);
+            case Setext.Heading2: return MarkdownScanner.ScanSetextHeading(text, 2, _refLabels);
             case Setext.Underline: return MarkdownScanner.ScanSetextUnderline(text);
         }
 
+        if (_refDef[lineNumber]) return MarkdownScanner.ScanReferenceDefinition(text);
+
         return _tables[lineNumber] switch
         {
-            TableRole.Header => MarkdownScanner.ScanTableRow(text, header: true),
+            TableRole.Header => MarkdownScanner.ScanTableRow(text, header: true, _refLabels),
             TableRole.Delimiter => MarkdownScanner.ScanTableDelimiter(text),
-            TableRole.Row => MarkdownScanner.ScanTableRow(text, header: false),
-            _ => MarkdownScanner.Scan(text),
+            TableRole.Row => MarkdownScanner.ScanTableRow(text, header: false, _refLabels),
+            _ => MarkdownScanner.Scan(text, _refLabels),
         };
     }
 
@@ -151,6 +155,8 @@ public sealed class MarkdownAnalyzer
         _tables = new TableRole[lineCount + 1];
         _setext = new Setext[lineCount + 1];
         _callouts = new CalloutKind[lineCount + 1];
+        _refDef = new bool[lineCount + 1];
+        _refLabels = new HashSet<string>(StringComparer.Ordinal);
         _blockStart = new int[lineCount + 1];
         _mathStart = new int[lineCount + 1];
         _tableStart = new int[lineCount + 1];
@@ -239,6 +245,18 @@ public sealed class MarkdownAnalyzer
 
             for (int m = n; m <= lineCount && _fences[m] == Fence.None && IsBlockquote(TextOf(m)); m++)
                 _callouts[m] = kind;
+        }
+
+        // Link reference definitions: [label]: destination. Collect their labels so inline reference
+        // links can resolve, and flag the line so it renders as dim metadata rather than literal brackets.
+        for (int n = 1; n <= lineCount; n++)
+        {
+            if (_fences[n] != Fence.None || _tables[n] != TableRole.None || _setext[n] != Setext.None) continue;
+            if (MarkdownScanner.TryReadReferenceDefinition(TextOf(n), out string label))
+            {
+                _refDef[n] = true;
+                _refLabels.Add(MarkdownScanner.NormalizeReferenceLabel(label));
+            }
         }
 
         // Display math: $$ … $$ blocks (single- or multi-line), living outside code fences.
