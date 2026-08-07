@@ -1,5 +1,7 @@
 using System.IO;
+using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -22,8 +24,17 @@ public sealed class ImageElementGenerator : VisualLineElementGenerator
     // ![alt](inside) — inside is the path plus an optional " =WIDTHx" size hint.
     private static readonly Regex ImagePattern = new(@"!\[([^\]]*)\]\(([^)]+)\)", RegexOptions.Compiled);
     private static readonly Regex SizePattern = new(@"\s+=(\d+)(?:x\d*)?\s*$", RegexOptions.Compiled);
+    private static readonly Regex TitlePattern = new("""\s+"[^"]*"\s*$|\s+'[^']*'\s*$""", RegexOptions.Compiled);
 
     private static readonly Dictionary<string, (DateTime Stamp, BitmapImage Image)> Cache = new();
+
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private enum Phase { Loading, Ready, Failed }
+    // Remote images download in the background; the entry flips to Ready and the view repaints.
+    private readonly Dictionary<string, (Phase Phase, BitmapImage? Image)> _remote = new();
+
+    /// <summary>Repaints the text view after a remote image finishes downloading, so it can render.</summary>
+    public Action? RequestRedraw { get; set; }
 
     public bool HideMarkers { get; set; } = true;
 
@@ -114,7 +125,7 @@ public sealed class ImageElementGenerator : VisualLineElementGenerator
     }
 
     /// <summary>Parses the inside of the parentheses into a loadable image plus optional pinned width.</summary>
-    private static bool Resolve(string inside, out BitmapImage image, out string path, out double? width)
+    private bool Resolve(string inside, out BitmapImage image, out string path, out double? width)
     {
         image = null!;
         width = null;
@@ -127,7 +138,19 @@ public sealed class ImageElementGenerator : VisualLineElementGenerator
             path = path[..size.Index].Trim();
         }
 
-        if (path.Length == 0 || !File.Exists(path)) return false;
+        // Strip an optional Markdown title: ![alt](url "Title") / ![alt](url 'Title').
+        var title = TitlePattern.Match(path);
+        if (title.Success) path = path[..title.Index].Trim();
+
+        if (path.Length == 0) return false;
+
+        if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return ResolveRemote(path, out image);
+        }
+
+        if (!File.Exists(path)) return false;
 
         try
         {
@@ -138,6 +161,63 @@ public sealed class ImageElementGenerator : VisualLineElementGenerator
         {
             return false;
         }
+    }
+
+    /// <summary>Resolves an <c>http(s)</c> image from the download cache, kicking off a background
+    /// fetch the first time. Returns false until the bytes have arrived (the alt text shows meanwhile).</summary>
+    private bool ResolveRemote(string url, out BitmapImage image)
+    {
+        image = null!;
+
+        if (_remote.TryGetValue(url, out var state))
+        {
+            if (state.Phase == Phase.Ready)
+            {
+                image = state.Image!;
+                return true;
+            }
+            return false;   // still loading, or failed — leave it as a link
+        }
+
+        _remote[url] = (Phase.Loading, null);
+        _ = DownloadAsync(url);
+        return false;
+    }
+
+    private async Task DownloadAsync(string url)
+    {
+        try
+        {
+            byte[] bytes = await Http.GetByteArrayAsync(url).ConfigureAwait(false);
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                try { _remote[url] = (Phase.Ready, Decode(bytes)); }
+                catch (Exception ex) when (ex is NotSupportedException or ArgumentException or IOException)
+                {
+                    _remote[url] = (Phase.Failed, null);
+                }
+                RequestRedraw?.Invoke();
+            });
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                _remote[url] = (Phase.Failed, null);
+                RequestRedraw?.Invoke();
+            });
+        }
+    }
+
+    private static BitmapImage Decode(byte[] bytes)
+    {
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        bitmap.StreamSource = new MemoryStream(bytes);
+        bitmap.EndInit();
+        bitmap.Freeze();
+        return bitmap;
     }
 
     private static BitmapImage Load(string path)

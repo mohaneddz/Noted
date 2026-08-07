@@ -100,6 +100,7 @@ public partial class MainWindow : Window
         var textView = Editor.TextArea.TextView;
         textView.LineTransformers.Add(_colorizer);
         // Images first: they claim the whole ![](…) span before the marker generator can pick at it.
+        _images.RequestRedraw = () => Editor.TextArea.TextView.Redraw(DispatcherPriority.Render);
         textView.ElementGenerators.Add(_images);
         // Block math collapses whole $$…$$ ranges, so it must claim the span before line-local generators.
         textView.ElementGenerators.Add(_blockMath);
