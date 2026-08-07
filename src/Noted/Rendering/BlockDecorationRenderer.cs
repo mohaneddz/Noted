@@ -102,15 +102,22 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
 
             if ((info.Block & MdStyle.Quote) != 0)
             {
-                var kind = _analyzer.GetCallout(visualLine.FirstDocumentLine.LineNumber);
-                var barBrush = kind != CalloutKind.None ? Theme.CalloutColor(kind) : Theme.QuoteBar;
-                double contentX = ContentX(textView, visualLine, info.ContentStart);
-                double spacing = Math.Min(BarWidth + BarGap, Math.Max(contentX, BarWidth) / info.QuoteDepth);
-                for (int depth = 0; depth < info.QuoteDepth; depth++)
+                int lineNumber = visualLine.FirstDocumentLine.LineNumber;
+                if (_analyzer.TryGetCalloutBlock(lineNumber, out int cStart, out int cEnd, out var kind))
                 {
-                    double x = contentX - (info.QuoteDepth - depth) * spacing;
-                    if (x < 0) x = 0;
-                    drawingContext.DrawRectangle(barBrush, null, new Rect(x, top, BarWidth, height));
+                    DrawCalloutFrame(drawingContext, Theme.CalloutColor(kind), top, height, right,
+                        first: lineNumber == cStart, last: lineNumber == cEnd);
+                }
+                else
+                {
+                    double contentX = ContentX(textView, visualLine, info.ContentStart);
+                    double spacing = Math.Min(BarWidth + BarGap, Math.Max(contentX, BarWidth) / info.QuoteDepth);
+                    for (int depth = 0; depth < info.QuoteDepth; depth++)
+                    {
+                        double x = contentX - (info.QuoteDepth - depth) * spacing;
+                        if (x < 0) x = 0;
+                        drawingContext.DrawRectangle(Theme.QuoteBar, null, new Rect(x, top, BarWidth, height));
+                    }
                 }
             }
 
@@ -121,6 +128,35 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
                 drawingContext.DrawLine(rulePen, new Point(left, y), new Point(Math.Max(left, right - 6), y));
             }
         }
+    }
+
+    /// <summary>Derived (fill, border) brushes per callout colour, so a repaint doesn't re-allocate them.</summary>
+    private readonly Dictionary<Color, (Brush Fill, Brush Border)> _calloutBrushes = new();
+
+    /// <summary>Draws one line's slice of a callout's surrounding box: a tinted fill, a coloured accent down
+    /// the left edge, a hairline down the right, and top/bottom edges on the block's first/last lines.</summary>
+    private void DrawCalloutFrame(DrawingContext drawingContext, Brush accent, double top, double height,
+        double right, bool first, bool last)
+    {
+        var color = accent is SolidColorBrush s ? s.Color : Colors.Gray;
+        if (!_calloutBrushes.TryGetValue(color, out var brushes))
+        {
+            Brush Tint(byte a)
+            {
+                var b = new SolidColorBrush(Color.FromArgb(a, color.R, color.G, color.B));
+                b.Freeze();
+                return b;
+            }
+            brushes = (Tint(0x1E), Tint(0x7A));
+            _calloutBrushes[color] = brushes;
+        }
+
+        const double accentWidth = 3;
+        drawingContext.DrawRectangle(brushes.Fill, null, new Rect(0, top, right, height));
+        drawingContext.DrawRectangle(accent, null, new Rect(0, top, accentWidth, height));
+        drawingContext.DrawRectangle(brushes.Border, null, new Rect(right - 1, top, 1, height));
+        if (first) drawingContext.DrawRectangle(brushes.Border, null, new Rect(0, top, right, 1));
+        if (last) drawingContext.DrawRectangle(brushes.Border, null, new Rect(0, top + height - 1, right, 1));
     }
 
     private Rect DrawLanguageTag(DrawingContext drawingContext, TextView textView, string language, double top, double right)

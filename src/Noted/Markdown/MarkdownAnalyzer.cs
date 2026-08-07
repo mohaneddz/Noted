@@ -332,6 +332,25 @@ public sealed class MarkdownAnalyzer
         return lineNumber >= 1 && lineNumber < _callouts.Length ? _callouts[lineNumber] : CalloutKind.None;
     }
 
+    /// <summary>If <paramref name="lineNumber"/> is inside a callout, returns the contiguous
+    /// blockquote run it belongs to (inclusive) and the callout's kind.</summary>
+    public bool TryGetCalloutBlock(int lineNumber, out int startLine, out int endLine, out CalloutKind kind)
+    {
+        startLine = endLine = lineNumber;
+        kind = CalloutKind.None;
+        if (_document is null) return false;
+
+        EnsureFresh();
+        if (lineNumber < 1 || lineNumber >= _callouts.Length) return false;
+
+        kind = _callouts[lineNumber];
+        if (kind == CalloutKind.None) return false;
+
+        while (startLine > 1 && _callouts[startLine - 1] == kind) startLine--;
+        while (endLine + 1 < _callouts.Length && _callouts[endLine + 1] == kind) endLine++;
+        return true;
+    }
+
     /// <summary>Reads a line's callout kind by reusing the scanner's own <c>[!TYPE]</c> recognition.</summary>
     private static CalloutKind CalloutHeaderKind(string text)
     {
