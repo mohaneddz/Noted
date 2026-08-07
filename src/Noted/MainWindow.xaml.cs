@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly EmojiElementGenerator _emoji;
     private readonly InlineMathElementGenerator _inlineMath;
     private readonly BlockMathElementGenerator _blockMath;
+    private readonly DetailsElementGenerator _details;
     private readonly ImageElementGenerator _images = new();
     private BlockCollapser _collapser = null!;
     private readonly BlockDecorationRenderer _decorations;
@@ -66,6 +67,7 @@ public partial class MainWindow : Window
         _emoji = new EmojiElementGenerator(_analyzer, _reveal);
         _inlineMath = new InlineMathElementGenerator(_analyzer, _reveal);
         _blockMath = new BlockMathElementGenerator(_analyzer, _reveal);
+        _details = new DetailsElementGenerator(_analyzer, _reveal);
         _decorations = new BlockDecorationRenderer(_analyzer, _reveal);
 
         _statusTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -104,12 +106,15 @@ public partial class MainWindow : Window
         textView.ElementGenerators.Add(_images);
         // Block math collapses whole $$…$$ ranges, so it must claim the span before line-local generators.
         textView.ElementGenerators.Add(_blockMath);
+        // Details fold whole <details>…</details> ranges into a chip; also claim before line-local generators.
+        _details.RequestReveal = RevealAtOffset;
+        textView.ElementGenerators.Add(_details);
         textView.ElementGenerators.Add(_generator);
         textView.ElementGenerators.Add(_emoji);
         textView.ElementGenerators.Add(_inlineMath);
         textView.BackgroundRenderers.Add(_decorations);
 
-        _collapser = new BlockCollapser(textView, [_blockMath]);
+        _collapser = new BlockCollapser(textView, [_blockMath, _details]);
 
         DataObject.AddPastingHandler(Editor, OnEditorPaste);
 
@@ -849,6 +854,18 @@ public partial class MainWindow : Window
         StatusPath.Text = $"Copied {lines.Count} line{(lines.Count == 1 ? "" : "s")} of code";
     }
 
+    /// <summary>Moves the caret to <paramref name="offset"/> and focuses the editor, which reveals whatever
+    /// collapsed block sits there (e.g. a folded &lt;details&gt; chip the user clicked).</summary>
+    private void RevealAtOffset(int offset)
+    {
+        var document = Editor.Document;
+        if (document is null) return;
+
+        Editor.CaretOffset = Math.Clamp(offset, 0, document.TextLength);
+        Editor.TextArea.Caret.BringCaretToView();
+        Editor.Focus();
+    }
+
     private void RedrawLines(int fromLine, int toLine)
     {
         var document = Editor.Document;
@@ -873,7 +890,9 @@ public partial class MainWindow : Window
         // Collapsing blocks (display math, and later tables/diagrams) add or remove whole visual
         // lines when the caret crosses their edge, so a per-line redraw can't reconcile the layout —
         // repaint everything in that case.
-        if (_analyzer.TryGetMathBlock(fromLine, out _, out _) || _analyzer.TryGetMathBlock(toLine, out _, out _))
+        if (_analyzer.TryGetMathBlock(fromLine, out _, out _) || _analyzer.TryGetMathBlock(toLine, out _, out _) ||
+            _analyzer.TryGetDetailsBlock(fromLine, out _, out _, out _) ||
+            _analyzer.TryGetDetailsBlock(toLine, out _, out _, out _))
         {
             Editor.TextArea.TextView.Redraw(DispatcherPriority.Render);
             return;
@@ -913,6 +932,8 @@ public partial class MainWindow : Window
         _inlineMath.Theme = theme;
         _blockMath.HideMarkers = _settings.LiveMarkdown;
         _blockMath.Theme = theme;
+        _details.HideMarkers = _settings.LiveMarkdown;
+        _details.Theme = theme;
         _images.HideMarkers = _settings.LiveMarkdown;
         _reveal.Enabled = _settings.LiveMarkdown;
         _decorations.Theme = theme;

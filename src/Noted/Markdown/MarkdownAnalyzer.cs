@@ -31,6 +31,11 @@ public sealed class MarkdownAnalyzer
     private List<(int Start, int End)> _mathBlocks = [];
     private int[] _tableStart = [];
     private List<TableBlock> _tableBlocks = [];
+    private int[] _detailsStart = [];
+    private List<DetailsBlock> _detailsBlocks = [];
+
+    /// <summary>An HTML <c>&lt;details&gt;</c> disclosure block, from its opening tag to <c>&lt;/details&gt;</c>.</summary>
+    private readonly record struct DetailsBlock(int StartLine, int EndLine, string Summary);
 
     /// <summary>A rendered table: its header line, the last body line, and one alignment per column.</summary>
     private readonly record struct TableBlock(int HeaderLine, int EndLine, ColumnAlign[] Aligns);
@@ -89,6 +94,35 @@ public sealed class MarkdownAnalyzer
 
         startLine = endLine = 0;
         language = string.Empty;
+        return false;
+    }
+
+    /// <summary>Every <c>&lt;details&gt;</c> block, as (start, end) inclusive line ranges.</summary>
+    public IEnumerable<(int Start, int End)> DetailsBlocks()
+    {
+        if (_document is null) yield break;
+        EnsureFresh();
+        foreach (var block in _detailsBlocks) yield return (block.StartLine, block.EndLine);
+    }
+
+    /// <summary>If <paramref name="lineNumber"/> falls inside a <c>&lt;details&gt;</c> block, returns its
+    /// inclusive line range and summary text.</summary>
+    public bool TryGetDetailsBlock(int lineNumber, out int startLine, out int endLine, out string summary)
+    {
+        startLine = endLine = 0;
+        summary = string.Empty;
+        if (_document is null) return false;
+        EnsureFresh();
+
+        if (lineNumber >= 1 && lineNumber < _detailsStart.Length && _detailsStart[lineNumber] > 0)
+        {
+            var block = _detailsBlocks[_detailsStart[lineNumber] - 1];
+            startLine = block.StartLine;
+            endLine = block.EndLine;
+            summary = block.Summary;
+            return true;
+        }
+
         return false;
     }
 
@@ -160,9 +194,11 @@ public sealed class MarkdownAnalyzer
         _blockStart = new int[lineCount + 1];
         _mathStart = new int[lineCount + 1];
         _tableStart = new int[lineCount + 1];
+        _detailsStart = new int[lineCount + 1];
         _blocks = [];
         _mathBlocks = [];
         _tableBlocks = [];
+        _detailsBlocks = [];
 
         bool inFence = false;
         char fenceChar = '`';
@@ -257,6 +293,36 @@ public sealed class MarkdownAnalyzer
                 _refDef[n] = true;
                 _refLabels.Add(MarkdownScanner.NormalizeReferenceLabel(label));
             }
+        }
+
+        // HTML <details> disclosure blocks: fold everything from <details> to </details> into a
+        // single summary chip. The summary text comes from a <summary>…</summary> if one is present.
+        for (int n = 1; n <= lineCount; n++)
+        {
+            if (_fences[n] != Fence.None) continue;
+            string open = TextOf(n).TrimStart();
+            if (!open.StartsWith("<details", StringComparison.OrdinalIgnoreCase)) continue;
+            if (open.Length > 8 && open[8] is not ('>' or ' ' or '\t')) continue;   // not the <details> tag
+
+            string summary = "Details";
+            int end = -1;
+            for (int k = n; k <= lineCount && _fences[k] == Fence.None; k++)
+            {
+                string lk = TextOf(k);
+                int si = lk.IndexOf("<summary>", StringComparison.OrdinalIgnoreCase);
+                if (si >= 0)
+                {
+                    int se = lk.IndexOf("</summary>", si, StringComparison.OrdinalIgnoreCase);
+                    if (se > si + 9) summary = lk.Substring(si + 9, se - (si + 9)).Trim();
+                }
+                if (lk.IndexOf("</details>", StringComparison.OrdinalIgnoreCase) >= 0) { end = k; break; }
+            }
+            if (end <= n) continue;   // needs a real body to be worth folding
+
+            _detailsBlocks.Add(new DetailsBlock(n, end, summary.Length == 0 ? "Details" : summary));
+            int index = _detailsBlocks.Count;
+            for (int k = n; k <= end; k++) _detailsStart[k] = index;
+            n = end;
         }
 
         // Display math: $$ … $$ blocks (single- or multi-line), living outside code fences.
