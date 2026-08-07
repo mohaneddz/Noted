@@ -92,7 +92,9 @@ public sealed class PromptWindow : Window
     public static string? Ask(Window owner, string title, string initialValue = "")
     {
         var prompt = new PromptWindow(title, initialValue, null) { Owner = owner };
-        return prompt.ShowDialog() == true ? prompt._input.Text : null;
+        WindowBlur.Set(owner, true);
+        try { return prompt.ShowDialog() == true ? prompt._input.Text : null; }
+        finally { WindowBlur.Set(owner, false); }
     }
 
     /// <summary>Two-field variant, e.g. find and replace. Returns null if the user cancelled.</summary>
@@ -100,9 +102,14 @@ public sealed class PromptWindow : Window
         Window owner, string title, string secondLabel, string initialValue = "")
     {
         var prompt = new PromptWindow(title, initialValue, secondLabel) { Owner = owner };
-        return prompt.ShowDialog() == true
-            ? (prompt._input.Text, prompt._second?.Text ?? string.Empty)
-            : null;
+        WindowBlur.Set(owner, true);
+        try
+        {
+            return prompt.ShowDialog() == true
+                ? (prompt._input.Text, prompt._second?.Text ?? string.Empty)
+                : null;
+        }
+        finally { WindowBlur.Set(owner, false); }
     }
 
     private static Brush Brush(string key, Brush fallback) =>
