@@ -96,13 +96,14 @@ public sealed class TableElementGenerator : VisualLineElementGenerator, ICollaps
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         for (int c = 0; c < columns; c++)
-            grid.Children.Add(Cell(c < headerCells.Count ? headerCells[c] : "", Align(aligns, c), 0, c, columns, header: true));
+            grid.Children.Add(Cell(c < headerCells.Count ? headerCells[c] : "", Align(aligns, c), 0, c, columns, header: true, zebra: false));
 
         for (int r = 0; r < bodyRows.Count; r++)
         {
             var row = bodyRows[r];
+            bool zebra = r % 2 == 1;
             for (int c = 0; c < columns; c++)
-                grid.Children.Add(Cell(c < row.Count ? row[c] : "", Align(aligns, c), r + 1, c, columns, header: false));
+                grid.Children.Add(Cell(c < row.Count ? row[c] : "", Align(aligns, c), r + 1, c, columns, header: false, zebra));
         }
 
         var outer = new Border
@@ -122,12 +123,12 @@ public sealed class TableElementGenerator : VisualLineElementGenerator, ICollaps
     private static ColumnAlign Align(ColumnAlign[] aligns, int column) =>
         column < aligns.Length ? aligns[column] : ColumnAlign.None;
 
-    private Border Cell(string raw, ColumnAlign align, int row, int column, int columns, bool header)
+    private Border Cell(string raw, ColumnAlign align, int row, int column, int columns, bool header, bool zebra)
     {
         var text = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = Theme.Text,
+            Foreground = header ? Theme.Heading : Theme.Text,
             VerticalAlignment = VerticalAlignment.Center,
             TextAlignment = align switch
             {
@@ -141,11 +142,12 @@ public sealed class TableElementGenerator : VisualLineElementGenerator, ICollaps
 
         var cell = new Border
         {
-            // Interior grid lines: a hairline on the right (except the last column) and bottom of each cell.
+            // Interior grid lines: a hairline on the right (except the last column), a heavier rule
+            // under the header, and a hairline under every other body row.
             BorderBrush = Theme.Border,
-            BorderThickness = new Thickness(0, 0, column < columns - 1 ? 1 : 0, 1),
-            Background = header ? Theme.CodeBackground : Brushes.Transparent,
-            Padding = new Thickness(10, 6, 10, 6),
+            BorderThickness = new Thickness(0, 0, column < columns - 1 ? 1 : 0, header ? 2 : 1),
+            Background = header ? Theme.SurfaceAlt : zebra ? Theme.Surface : Brushes.Transparent,
+            Padding = new Thickness(12, 7, 12, 7),
             Child = text,
         };
         Grid.SetRow(cell, row);
