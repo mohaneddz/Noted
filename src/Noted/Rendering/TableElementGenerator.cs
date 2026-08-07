@@ -111,13 +111,23 @@ public sealed class TableElementGenerator : VisualLineElementGenerator, ICollaps
             BorderBrush = Theme.Border,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
-            Margin = new Thickness(0, 4, 0, 6),
-            HorizontalAlignment = HorizontalAlignment.Left,
             ClipToBounds = true,
             Child = grid,
         };
-        if (ContentWidth > 0) outer.Width = ContentWidth;
-        return outer;
+
+        // A table only fills the reading column up to its natural content size — capped, not forced,
+        // so a narrow table doesn't stretch and a wide one scrolls horizontally instead of getting
+        // cropped at the pane edge.
+        var scroller = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 4, 0, 6),
+            Content = outer,
+        };
+        if (ContentWidth > 0) scroller.MaxWidth = ContentWidth;
+        return scroller;
     }
 
     private static ColumnAlign Align(ColumnAlign[] aligns, int column) =>
