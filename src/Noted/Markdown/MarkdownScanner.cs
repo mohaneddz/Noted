@@ -390,7 +390,8 @@ public static class MarkdownScanner
                 case '<':
                 {
                     int close = s.IndexOf('>', i + 1);
-                    if (close < 0 || close >= end || !LooksLikeUri(s, i + 1, close)) break;
+                    if (close < 0 || close >= end ||
+                        !(LooksLikeUri(s, i + 1, close) || LooksLikeEmail(s, i + 1, close))) break;
                     Flush(i);
                     output.Add(new MdToken(i, 1, MdStyle.Marker | MdStyle.Link));
                     Emit(output, i + 1, close - i - 1, inherit | MdStyle.Link);
@@ -574,5 +575,25 @@ public static class MarkdownScanner
         for (int i = start; i < end; i++)
             if (char.IsWhiteSpace(s[i])) return false;
         return true;
+    }
+
+    /// <summary>True if <c>start..end</c> reads as a bare email address (for an <c>&lt;user@host&gt;</c> autolink):
+    /// a single unescaped <c>@</c> with non-empty, whitespace-free sides and a dot in the domain.</summary>
+    private static bool LooksLikeEmail(string s, int start, int end)
+    {
+        int at = -1;
+        for (int i = start; i < end; i++)
+        {
+            char c = s[i];
+            if (char.IsWhiteSpace(c)) return false;
+            if (c == '@')
+            {
+                if (at >= 0) return false;   // more than one '@'
+                at = i;
+            }
+        }
+        if (at <= start || at >= end - 1) return false;      // '@' must have text on both sides
+        int dot = s.IndexOf('.', at + 1);
+        return dot > at + 1 && dot < end - 1;                // domain has a dot with labels around it
     }
 }
