@@ -15,6 +15,8 @@ public sealed class MarkdownAnalyzer
 
     private enum Setext : byte { None, Heading1, Heading2, Underline }
 
+    private enum Directive : byte { None, Open, Body, Close }
+
     /// <summary>One fenced code block, from its opening delimiter line to its closing one.</summary>
     private readonly record struct FenceBlock(int StartLine, int EndLine, string Language);
 
@@ -24,6 +26,7 @@ public sealed class MarkdownAnalyzer
     private TableRole[] _tables = [];
     private Setext[] _setext = [];
     private CalloutKind[] _callouts = [];
+    private Directive[] _directives = [];
     private bool[] _refDef = [];
     private HashSet<string> _refLabels = new(StringComparer.Ordinal);
     private int[] _blockStart = [];
@@ -198,13 +201,27 @@ public sealed class MarkdownAnalyzer
 
         if (_refDef[lineNumber]) return MarkdownScanner.ScanReferenceDefinition(text);
 
-        return _tables[lineNumber] switch
+        if (_directives[lineNumber] is Directive.Open or Directive.Close)
+            return MarkdownScanner.ScanDirectiveDelimiter(text);
+
+        if (_detailsStart[lineNumber] > 0)
+        {
+            var details = _detailsBlocks[_detailsStart[lineNumber] - 1];
+            if (lineNumber == details.StartLine || lineNumber == details.EndLine)
+                return MarkdownScanner.ScanDetailsTag(text);
+        }
+
+        var scanned = _tables[lineNumber] switch
         {
             TableRole.Header => MarkdownScanner.ScanTableRow(text, header: true, _refLabels),
             TableRole.Delimiter => MarkdownScanner.ScanTableDelimiter(text),
             TableRole.Row => MarkdownScanner.ScanTableRow(text, header: false, _refLabels),
             _ => MarkdownScanner.Scan(text, _refLabels),
         };
+
+        // A directive's body prose isn't marked up specially — it just needs to carry the Callout
+        // flag so the background renderer keeps drawing the tinted frame across its blank lines too.
+        return _directives[lineNumber] == Directive.Body ? MarkdownScanner.WithCalloutBlock(scanned) : scanned;
     }
 
     private void EnsureFresh()
@@ -218,6 +235,7 @@ public sealed class MarkdownAnalyzer
         _tables = new TableRole[lineCount + 1];
         _setext = new Setext[lineCount + 1];
         _callouts = new CalloutKind[lineCount + 1];
+        _directives = new Directive[lineCount + 1];
         _refDef = new bool[lineCount + 1];
         _refLabels = new HashSet<string>(StringComparer.Ordinal);
         _blockStart = new int[lineCount + 1];
@@ -369,6 +387,40 @@ public sealed class MarkdownAnalyzer
             _detailsBlocks.Add(new DetailsBlock(n, end, summary.Length == 0 ? "Details" : summary));
             int index = _detailsBlocks.Count;
             for (int k = n; k <= end; k++) _detailsStart[k] = index;
+            n = end;
+        }
+
+        // Fenced directive callouts: ::: note … ::: (Pandoc/Docusaurus style). The whole block is tagged
+        // with a callout kind so it renders in the same tinted, bordered frame as a > [!NOTE] blockquote.
+        for (int n = 1; n <= lineCount; n++)
+        {
+            if (_fences[n] != Fence.None || _callouts[n] != CalloutKind.None) continue;
+
+            string t = TextOf(n).TrimStart();
+            if (!t.StartsWith(":::", StringComparison.Ordinal)) continue;
+            string name = t.TrimStart(':').Trim();
+            if (name.Length == 0) continue;   // a bare ::: is a closer, not an opener
+
+            int space = name.IndexOfAny([' ', '\t']);
+            var kind = Callout.Parse(space < 0 ? name : name[..space]);
+            if (kind == CalloutKind.None) continue;   // unrecognised directive name — leave as plain text
+
+            int end = -1;
+            for (int m = n + 1; m <= lineCount && _fences[m] == Fence.None; m++)
+            {
+                string tm = TextOf(m).Trim();
+                if (tm.StartsWith(":::", StringComparison.Ordinal) && tm.TrimStart(':').Trim().Length == 0)
+                {
+                    end = m;
+                    break;
+                }
+            }
+            if (end < 0) continue;
+
+            for (int k = n; k <= end; k++) _callouts[k] = kind;
+            _directives[n] = Directive.Open;
+            _directives[end] = Directive.Close;
+            for (int k = n + 1; k < end; k++) _directives[k] = Directive.Body;
             n = end;
         }
 

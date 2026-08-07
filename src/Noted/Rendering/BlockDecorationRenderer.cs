@@ -100,7 +100,7 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
                 drawingContext.DrawRectangle(Theme.Surface, null, new Rect(0, top, right, height + 0.5));
             }
 
-            if ((info.Block & MdStyle.Quote) != 0)
+            if ((info.Block & (MdStyle.Quote | MdStyle.Callout)) != 0)
             {
                 int lineNumber = visualLine.FirstDocumentLine.LineNumber;
                 if (_analyzer.TryGetCalloutBlock(lineNumber, out int cStart, out int cEnd, out var kind))
@@ -108,7 +108,7 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
                     DrawCalloutFrame(drawingContext, Theme.CalloutColor(kind), top, height, right,
                         first: lineNumber == cStart, last: lineNumber == cEnd);
                 }
-                else
+                else if ((info.Block & MdStyle.Quote) != 0)
                 {
                     double contentX = ContentX(textView, visualLine, info.ContentStart);
                     double spacing = Math.Min(BarWidth + BarGap, Math.Max(contentX, BarWidth) / info.QuoteDepth);

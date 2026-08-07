@@ -30,6 +30,65 @@ public static class MarkdownScanner
     }
 
     /// <summary>
+    /// A <c>&lt;details&gt;</c>/<c>&lt;summary&gt;…&lt;/summary&gt;</c>/<c>&lt;/details&gt;</c> tag line.
+    /// When the block is unfolded (caret inside it, editing the raw HTML) these wrapper tags fade to
+    /// dim text — the same treatment a fence delimiter gets — so what's left reading like a "proper
+    /// block" is the markdown body between them, not raw angle-bracket tags.
+    /// </summary>
+    public static MdLine ScanDetailsTag(string line)
+    {
+        int i = SkipWhitespace(line, 0);
+        int end = line.Length;
+        while (end > i && (line[end - 1] == ' ' || line[end - 1] == '\t')) end--;
+
+        var tokens = new List<MdToken>(1);
+        if (end > i) tokens.Add(new MdToken(i, end - i, MdStyle.Marker));
+
+        return new MdLine
+        {
+            ContentStart = i,
+            Tokens = tokens,
+            AllMarkers = true,
+        };
+    }
+
+    /// <summary>
+    /// A fenced directive's opening (<c>::: note</c>) or closing (<c>:::</c>) line. The whole line
+    /// is a marker — same treatment as a code-fence delimiter — so it fades to dim text instead of
+    /// rendering as prose.
+    /// </summary>
+    public static MdLine ScanDirectiveDelimiter(string line)
+    {
+        int i = SkipWhitespace(line, 0);
+        int end = line.Length;
+        while (end > i && (line[end - 1] == ' ' || line[end - 1] == '\t')) end--;
+
+        var tokens = new List<MdToken>(1);
+        if (end > i) tokens.Add(new MdToken(i, end - i, MdStyle.Marker | MdStyle.Callout));
+
+        return new MdLine
+        {
+            Block = MdStyle.Callout,
+            ContentStart = i,
+            Tokens = tokens,
+            AllMarkers = true,
+        };
+    }
+
+    /// <summary>Copies a scanned line, adding the <see cref="MdStyle.Callout"/> block flag — used for a
+    /// fenced directive's body lines, whose prose is scanned normally but still needs the flag so the
+    /// tinted frame keeps drawing across it (including blank lines).</summary>
+    public static MdLine WithCalloutBlock(MdLine line) => new()
+    {
+        Block = line.Block | MdStyle.Callout,
+        HeadingLevel = line.HeadingLevel,
+        QuoteDepth = line.QuoteDepth,
+        ContentStart = line.ContentStart,
+        Tokens = line.Tokens,
+        AllMarkers = line.AllMarkers,
+    };
+
+    /// <summary>
     /// A table's delimiter row (<c>|:---|---:|</c>). It carries no prose, so it is treated like a
     /// horizontal rule: the characters fade out and a stroke is drawn where the row sits, giving
     /// the header a clean underline.
