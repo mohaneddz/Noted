@@ -78,9 +78,26 @@ public static class MathVisual
     // whether each unique formula renders. Bounded so a document full of distinct formulas can't grow it forever.
     private static readonly Dictionary<string, bool> Validated = new(StringComparer.Ordinal);
 
+    // WpfMath 2.1.0 (the newest release) only implements the `pmatrix` environment, so the common
+    // amsmath environments are rewritten onto it. They then render — parenthesised — instead of
+    // failing to parse and falling back to raw source.
+    private static readonly Regex ArrayEnvironment =
+        new(@"\\begin\s*\{array\}\s*\{[^}]*\}", RegexOptions.Compiled);
+    private static readonly Regex MatrixLikeEnvironment = new(
+        @"\\(begin|end)\s*\{(?:matrix|bmatrix|Bmatrix|vmatrix|Vmatrix|smallmatrix|array|aligned|align|alignat|gathered|gather|cases|split)\*?\}",
+        RegexOptions.Compiled);
+
+    /// <summary>Rewrites amsmath environments WpfMath can't parse into the one it can (<c>pmatrix</c>).</summary>
+    public static string Normalize(string latex)
+    {
+        if (latex.IndexOf(@"\begin", StringComparison.Ordinal) < 0) return latex;
+        latex = ArrayEnvironment.Replace(latex, @"\begin{pmatrix}");
+        return MatrixLikeEnvironment.Replace(latex, @"\$1{pmatrix}");
+    }
+
     public static bool CanRender(string latex)
     {
-        latex = latex.Trim();
+        latex = Normalize(latex.Trim());
         if (latex.Length == 0) return false;
         if (Validated.TryGetValue(latex, out bool ok)) return ok;
 
@@ -91,7 +108,7 @@ public static class MathVisual
     }
 
     public static FormulaControl? TryBuild(string latex, double scale, Brush foreground)
-        => CanRender(latex) ? Build(latex.Trim(), scale, foreground) : null;
+        => CanRender(latex) ? Build(Normalize(latex.Trim()), scale, foreground) : null;
 
     private static FormulaControl? Build(string latex, double scale, Brush foreground)
     {
