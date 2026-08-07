@@ -30,6 +30,9 @@ public sealed class BlockMathElementGenerator : VisualLineElementGenerator, ICol
 
     public double ContentWidth { get; set; }
 
+    /// <summary>Raised after the LaTeX pill copies, with a short message for a toast.</summary>
+    public Action<string>? Copied { get; set; }
+
     public IEnumerable<(int Start, int End)> CollapsedBlockRanges(TextDocument document)
     {
         if (!HideMarkers) yield break;
@@ -115,7 +118,11 @@ public sealed class BlockMathElementGenerator : VisualLineElementGenerator, ICol
         pill.MouseLeftButtonDown += (_, e) =>
         {
             e.Handled = true;   // keep the caret from jumping into the block (which would un-render it)
-            try { Clipboard.SetText(latex); }
+            try
+            {
+                Clipboard.SetText(latex);
+                Copied?.Invoke("Copied LaTeX");
+            }
             catch (System.Runtime.InteropServices.ExternalException) { }
         };
 

@@ -107,6 +107,7 @@ public partial class MainWindow : Window
         _images.RequestRedraw = () => Editor.TextArea.TextView.Redraw(DispatcherPriority.Render);
         textView.ElementGenerators.Add(_images);
         // Block math collapses whole $$…$$ ranges, so it must claim the span before line-local generators.
+        _blockMath.Copied = ShowToast;
         textView.ElementGenerators.Add(_blockMath);
         // Details fold whole <details>…</details> ranges into a chip; also claim before line-local generators.
         _details.RequestReveal = RevealAtOffset;
@@ -876,7 +877,28 @@ public partial class MainWindow : Window
             return; // clipboard busy — nothing we can do, don't crash
         }
 
-        StatusPath.Text = $"Copied {lines.Count} line{(lines.Count == 1 ? "" : "s")} of code";
+        ShowToast($"Copied {lines.Count} line{(lines.Count == 1 ? "" : "s")} of code");
+    }
+
+    private Storyboard? _toastStoryboard;
+
+    /// <summary>Flashes a small transient toast near the bottom of the editor, then fades it out.</summary>
+    public void ShowToast(string message)
+    {
+        ToastText.Text = message;
+
+        _toastStoryboard?.Stop(Toast);
+
+        var fade = new DoubleAnimationUsingKeyFrames();
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120))));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1500))));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1900))));
+
+        _toastStoryboard = new Storyboard();
+        _toastStoryboard.Children.Add(fade);
+        Storyboard.SetTarget(fade, Toast);
+        Storyboard.SetTargetProperty(fade, new PropertyPath(UIElement.OpacityProperty));
+        _toastStoryboard.Begin(Toast, true);
     }
 
     /// <summary>Moves the caret to <paramref name="offset"/> and focuses the editor, which reveals whatever

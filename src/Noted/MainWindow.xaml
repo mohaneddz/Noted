@@ -139,6 +139,19 @@
                                Foreground="{DynamicResource Brush.Accent}" Margin="10,0,0,0" Opacity="0" />
                 </DockPanel>
             </Grid>
+
+            <!-- ============ transient toast ============ -->
+            <Border x:Name="Toast" Grid.Row="1" IsHitTestVisible="False" Opacity="0"
+                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28"
+                    Background="{DynamicResource Brush.SurfaceAlt}"
+                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                    CornerRadius="8" Padding="16,9">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.35" Color="#000000" />
+                </Border.Effect>
+                <TextBlock x:Name="ToastText" Foreground="{DynamicResource Brush.Text}"
+                           FontSize="12.5" FontWeight="SemiBold" />
+            </Border>
         </Grid>
     </Border>
 </Window>
