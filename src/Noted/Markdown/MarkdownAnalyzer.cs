@@ -35,6 +35,7 @@ public sealed class MarkdownAnalyzer
     private int[] _tableStart = [];
     private List<TableBlock> _tableBlocks = [];
     private int[] _detailsStart = [];
+    private bool[] _detailsTagLine = [];
     private List<DetailsBlock> _detailsBlocks = [];
 
     /// <summary>An HTML <c>&lt;details&gt;</c> disclosure block, from its opening tag to <c>&lt;/details&gt;</c>.</summary>
@@ -204,12 +205,7 @@ public sealed class MarkdownAnalyzer
         if (_directives[lineNumber] is Directive.Open or Directive.Close)
             return MarkdownScanner.ScanDirectiveDelimiter(text);
 
-        if (_detailsStart[lineNumber] > 0)
-        {
-            var details = _detailsBlocks[_detailsStart[lineNumber] - 1];
-            if (lineNumber == details.StartLine || lineNumber == details.EndLine)
-                return MarkdownScanner.ScanDetailsTag(text);
-        }
+        if (_detailsTagLine[lineNumber]) return MarkdownScanner.ScanDetailsTag(text);
 
         var scanned = _tables[lineNumber] switch
         {
@@ -242,6 +238,7 @@ public sealed class MarkdownAnalyzer
         _mathStart = new int[lineCount + 1];
         _tableStart = new int[lineCount + 1];
         _detailsStart = new int[lineCount + 1];
+        _detailsTagLine = new bool[lineCount + 1];
         _blocks = [];
         _mathBlocks = [];
         _tableBlocks = [];
@@ -371,16 +368,18 @@ public sealed class MarkdownAnalyzer
 
             string summary = "Details";
             int end = -1;
+            _detailsTagLine[n] = true;   // the <details> opening line itself
             for (int k = n; k <= lineCount && _fences[k] == Fence.None; k++)
             {
                 string lk = TextOf(k);
                 int si = lk.IndexOf("<summary>", StringComparison.OrdinalIgnoreCase);
                 if (si >= 0)
                 {
+                    _detailsTagLine[k] = true;   // <summary>…</summary> can sit on its own line
                     int se = lk.IndexOf("</summary>", si, StringComparison.OrdinalIgnoreCase);
                     if (se > si + 9) summary = lk.Substring(si + 9, se - (si + 9)).Trim();
                 }
-                if (lk.IndexOf("</details>", StringComparison.OrdinalIgnoreCase) >= 0) { end = k; break; }
+                if (lk.IndexOf("</details>", StringComparison.OrdinalIgnoreCase) >= 0) { end = k; _detailsTagLine[k] = true; break; }
             }
             if (end <= n) continue;   // needs a real body to be worth folding
 
