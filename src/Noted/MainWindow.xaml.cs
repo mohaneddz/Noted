@@ -464,6 +464,7 @@ public partial class MainWindow : Window
 
         _switchingTabs = false;
 
+        UpdateFlowDirection();
         _collapser?.Update();
         Editor.TextArea.TextView.Redraw();
         UpdateStatusBar();
@@ -684,9 +685,29 @@ public partial class MainWindow : Window
         // Editing can add, remove or resize a $$…$$ / table / diagram block, so re-sync the folds.
         _collapser.Update();
 
+        UpdateFlowDirection();
         ScheduleStatusUpdate();
         ScheduleAutoSave();
         if (_active is not null) Title = $"{_active.Title} — Noted";
+    }
+
+    /// <summary>Picks the editor's base text direction from the note's dominant script, so a predominantly
+    /// Arabic/Hebrew note lays out right-to-left while a Latin note stays left-to-right.</summary>
+    private void UpdateFlowDirection()
+    {
+        var document = Editor.Document;
+        if (document is null) return;
+
+        string sample = document.GetText(0, Math.Min(document.TextLength, 8000));
+        var direction = TextDirection.IsPredominantlyRtl(sample)
+            ? FlowDirection.RightToLeft
+            : FlowDirection.LeftToRight;
+
+        if (Editor.FlowDirection != direction)
+        {
+            Editor.FlowDirection = direction;
+            Editor.TextArea.TextView.Redraw(DispatcherPriority.Render);
+        }
     }
 
     private void OnEditorPreviewKeyDown(object? sender, KeyEventArgs e)
