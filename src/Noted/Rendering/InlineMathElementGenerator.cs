@@ -79,18 +79,28 @@ public static class MathVisual
     private static readonly Dictionary<string, bool> Validated = new(StringComparer.Ordinal);
 
     // WpfMath 2.1.0 (the newest release) only implements the `pmatrix` environment, so the common
-    // amsmath environments are rewritten onto it. They then render — parenthesised — instead of
-    // failing to parse and falling back to raw source.
+    // amsmath environments are rewritten onto it. `pmatrix` bakes its own bracket delimiters into the
+    // render (square brackets, not parens, despite the name) — so they render as a bracketed grid
+    // instead of failing to parse and falling back to raw source.
     private static readonly Regex ArrayEnvironment =
         new(@"\\begin\s*\{array\}\s*\{[^}]*\}", RegexOptions.Compiled);
     private static readonly Regex MatrixLikeEnvironment = new(
         @"\\(begin|end)\s*\{(?:matrix|bmatrix|Bmatrix|vmatrix|Vmatrix|smallmatrix|array|aligned|align|alignat|gathered|gather|cases|split)\*?\}",
         RegexOptions.Compiled);
 
+    // A matrix environment the author already wrapped in its own \left X … \right Y (very common for
+    // "matrix representation" notation) would double up on delimiters once pmatrix adds its own — so
+    // that outer wrapping is stripped first and pmatrix's baked-in brackets are left to do the job.
+    private static readonly Regex OuterDelimiters = new(
+        @"^\s*\\left\s*(?:\\[{}|]|\\Vert|\\vert|[(\[.])\s*(\\begin\s*\{(?:matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|smallmatrix|array)\*?\}.*\\end\s*\{(?:matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|smallmatrix|array)\*?\})\s*\\right\s*(?:\\[{}|]|\\Vert|\\vert|[)\].])\s*$",
+        RegexOptions.Compiled | RegexOptions.Singleline);
+
     /// <summary>Rewrites amsmath environments WpfMath can't parse into the one it can (<c>pmatrix</c>).</summary>
     public static string Normalize(string latex)
     {
         if (latex.IndexOf(@"\begin", StringComparison.Ordinal) < 0) return latex;
+        var outer = OuterDelimiters.Match(latex);
+        if (outer.Success) latex = outer.Groups[1].Value;
         latex = ArrayEnvironment.Replace(latex, @"\begin{pmatrix}");
         return MatrixLikeEnvironment.Replace(latex, @"\$1{pmatrix}");
     }
