@@ -27,6 +27,11 @@ public sealed class MarkdownAnalyzer
     private int[] _blockStart = [];
     private int[] _mathStart = [];
     private List<(int Start, int End)> _mathBlocks = [];
+    private int[] _tableStart = [];
+    private List<TableBlock> _tableBlocks = [];
+
+    /// <summary>A rendered table: its header line, the last body line, and one alignment per column.</summary>
+    private readonly record struct TableBlock(int HeaderLine, int EndLine, ColumnAlign[] Aligns);
     private List<FenceBlock> _blocks = [];
     private bool _stale = true;
 
@@ -148,8 +153,10 @@ public sealed class MarkdownAnalyzer
         _callouts = new CalloutKind[lineCount + 1];
         _blockStart = new int[lineCount + 1];
         _mathStart = new int[lineCount + 1];
+        _tableStart = new int[lineCount + 1];
         _blocks = [];
         _mathBlocks = [];
+        _tableBlocks = [];
 
         bool inFence = false;
         char fenceChar = '`';

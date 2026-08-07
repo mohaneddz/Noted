@@ -33,6 +33,9 @@ public enum MdStyle
     Footnote = 1 << 22,
 }
 
+/// <summary>Per-column text alignment, read from a table's <c>:---</c> / <c>:--:</c> / <c>---:</c> delimiter row.</summary>
+public enum ColumnAlign { None, Left, Center, Right }
+
 /// <summary>The GitHub-style admonition kinds, as written in a <c>&gt; [!NOTE]</c> blockquote header.</summary>
 public enum CalloutKind { None, Note, Tip, Important, Warning, Caution }
 

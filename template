@@ -1,0 +1,565 @@
+# Heading 1
+## Heading 2
+### Heading 3
+#### Heading 4
+##### Heading 5
+###### Heading 6
+
+Alternative Heading 1
+=====================
+
+Alternative Heading 2
+---------------------
+
+---
+
+## Text Formatting
+
+Normal paragraph with **bold**, *italic*, ***bold italic***, ~~strikethrough~~, ==highlight==, __bold__, and _italic_.
+
+Escaped formatting: \*not italic\*, \# not a heading, and \[not a link\].
+
+This is `inline code`, and this is a <mark>highlight using HTML</mark>.
+
+H~2~O and X^2^ if subscript and superscript extensions are supported.
+
+Keyboard shortcut: <kbd>Ctrl</kbd> + <kbd>S</kbd>
+
+Abbreviation: HTML
+
+*[HTML]: HyperText Markup Language
+
+## Paragraphs and Line Breaks
+
+This is the first paragraph.
+
+This is the second paragraph.
+
+This line ends with two spaces.  
+This should appear on a new line.
+
+This line uses an HTML break.<br>
+This should also appear on a new line.
+
+## Blockquotes
+
+> This is a blockquote.
+>
+> It can contain multiple paragraphs.
+>
+> > This is a nested blockquote.
+>
+> - It can contain lists.
+> - And **formatted text**.
+
+## Unordered Lists
+
+- Item one
+- Item two
+  - Nested item
+    - Deeply nested item
+- Item three
+
+* Asterisk item
+* Another item
+
++ Plus item
++ Another item
+
+## Ordered Lists
+
+1. First item
+2. Second item
+3. Third item
+   1. Nested first
+   2. Nested second
+
+1. Every item can use `1.`
+1. Markdown should number them automatically.
+1. Like this.
+
+Start from another number:
+
+5. Fifth item
+6. Sixth item
+
+## Task Lists
+
+- [x] Completed task
+- [ ] Incomplete task
+- [x] Task with **bold text**
+  - [ ] Nested task
+  - [x] Completed nested task
+
+## Links
+
+[OpenAI](https://openai.com)
+
+[Link with a title](https://example.com "Example website")
+
+<https://example.com>
+
+<test@example.com>
+
+Reference-style link: [Example][example-link]
+
+Collapsed reference link: [Markdown][]
+
+Shortcut reference link: [Noted]
+
+[example-link]: https://example.com
+[Markdown]: https://www.markdownguide.org
+[Noted]: https://example.com/noted
+
+Internal heading link: [Jump to Tables](#tables)
+
+## Images
+
+![Alternative image text](https://picsum.photos/600/250)
+
+![Image with title](https://picsum.photos/400/200 "Random image")
+
+Clickable image:
+
+[![Clickable image](https://picsum.photos/300/150)](https://example.com)
+
+Reference image:
+
+![Reference image][sample-image]
+
+[sample-image]: https://picsum.photos/500/200
+
+## Horizontal Rules
+
+---
+
+***
+
+___
+
+## Inline Code
+
+Use `npm install` to install a package.
+
+A backtick inside code: ``const value = `Hello`;``
+
+## Code Blocks
+
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+}
+
+greet("World");
+```
+
+```python
+def fibonacci(n: int) -> list[int]:
+    sequence = [0, 1]
+
+    while len(sequence) < n:
+        sequence.append(sequence[-1] + sequence[-2])
+
+    return sequence[:n]
+
+
+print(fibonacci(10))
+```
+
+```json
+{
+  "name": "Noted",
+  "version": "1.0.0",
+  "markdown": true,
+  "features": ["preview", "syntax highlighting", "tables"]
+}
+```
+
+```html
+<article>
+  <h1>Hello, Markdown!</h1>
+  <p>This is HTML inside a code block.</p>
+</article>
+```
+
+```css
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+```
+
+```bash
+npm install
+npm run dev
+```
+
+Indented code block:
+
+    const message = "Indented code";
+    console.log(message);
+
+## Tables
+
+| Feature | Supported | Rating |
+|:--------|:---------:|-------:|
+| Headings | Yes | 10 |
+| Tables | Yes | 9 |
+| Footnotes | Maybe | 8 |
+| Mermaid | Maybe | 7 |
+
+Escaped pipe inside a table:
+
+| Syntax | Output |
+|---|---|
+| `A \| B` | A \| B |
+| `**Bold**` | **Bold** |
+
+## Footnotes
+
+Here is a sentence with a footnote.[^1]
+
+Here is another footnote with a longer identifier.[^important-note]
+
+An inline footnote may also work.^[This is an inline footnote.]
+
+[^1]: This is the first footnote.
+
+[^important-note]: This footnote contains multiple lines.
+
+    It may also contain an indented paragraph or code.
+
+## Definition Lists
+
+Markdown
+: A lightweight markup language.
+
+Noted
+: A modern notepad application.
+: It renders Markdown beautifully.
+
+## Collapsible Details
+
+<details>
+<summary>Click to expand</summary>
+
+This content should be hidden initially.
+
+- It supports lists.
+- It may support **Markdown formatting**.
+- It can contain `inline code`.
+
+</details>
+
+<details open>
+<summary>Expanded by default</summary>
+
+This section starts open.
+
+</details>
+
+## HTML Elements
+
+<div align="center">
+
+### Centered HTML Section
+
+<strong>Bold HTML text</strong>
+
+<em>Italic HTML text</em>
+
+<u>Underlined HTML text</u>
+
+<del>Deleted HTML text</del>
+
+</div>
+
+<p style="color: tomato;">Styled HTML paragraph, if inline styles are allowed.</p>
+
+<blockquote cite="https://example.com">
+An HTML blockquote.
+</blockquote>
+
+## Mathematical Expressions
+
+Inline math: $E = mc^2$
+
+Another inline expression: $\sqrt{a^2+b^2}$
+
+Block math:
+
+$$
+f(x) = \frac{1}{\sigma\sqrt{2\pi}}
+e^{-\frac{1}{2}\left(\frac{x-\mu}{\sigma}\right)^2}
+$$
+
+Matrix:
+
+$$
+A =
+\begin{bmatrix}
+1 & 2 \\
+3 & 4
+\end{bmatrix}
+$$
+
+Aligned equations:
+
+$$
+\begin{aligned}
+a &= b + c \\
+x &= y - z
+\end{aligned}
+$$
+
+## Mermaid Diagrams
+
+```mermaid
+flowchart TD
+    A[Open Noted] --> B{Create note?}
+    B -->|Yes| C[Write Markdown]
+    B -->|No| D[Open existing note]
+    C --> E[Render preview]
+    D --> E
+```
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant N as Noted
+    participant R as Renderer
+
+    U->>N: Write Markdown
+    N->>R: Send source text
+    R-->>N: Return rendered HTML
+    N-->>U: Display preview
+```
+
+```mermaid
+classDiagram
+    class Note {
+        +String title
+        +String content
+        +save()
+        +render()
+    }
+
+    class Folder {
+        +String name
+        +List~Note~ notes
+    }
+
+    Folder "1" --> "*" Note
+```
+
+## Admonitions and Callouts
+
+> [!NOTE]
+> This is a note callout.
+
+> [!TIP]
+> This is a helpful tip.
+
+> [!IMPORTANT]
+> This information is important.
+
+> [!WARNING]
+> Be careful with this action.
+
+> [!CAUTION]
+> This action may have consequences.
+
+::: note
+This is an alternative fenced directive.
+:::
+
+::: warning
+Alternative warning syntax.
+:::
+
+## Emoji
+
+Native emoji: 🚀 ✨ 📝 🔥 ✅ ❌ ⚠️
+
+Emoji shortcodes, if supported: :rocket: :sparkles: :memo: :fire: :white_check_mark:
+
+## Mentions, Tags, and Special Syntax
+
+@username
+
+#markdown #noted #testing
+
+Issue reference: #123
+
+Wiki-style link: [[Another Note]]
+
+Wiki-style embedded content: ![[Another Note]]
+
+Block reference: ((block-id))
+
+Highlight: ==important text==
+
+Comment syntax, if supported: %% hidden comment %%
+
+## Nested Components
+
+1. Ordered item
+   > A blockquote inside a list.
+   >
+   > ```typescript
+   > const nested = true;
+   > ```
+2. Another item
+   - [x] Nested completed task
+   - [ ] Nested incomplete task
+3. Final item
+
+> Blockquote containing a table:
+>
+> | Name | Value |
+> |---|---:|
+> | Alpha | 10 |
+> | Beta | 20 |
+
+## Escaped Characters
+
+\* Asterisks  
+\_ Underscores  
+\# Hash  
+\` Backtick  
+\[ Square bracket  
+\] Square bracket  
+\( Parenthesis  
+\) Parenthesis  
+\{ Curly brace  
+\} Curly brace  
+\> Greater-than sign  
+\+ Plus sign  
+\- Minus sign  
+\. Period  
+\! Exclamation mark  
+\\ Backslash  
+
+## Unicode and Languages
+
+English: Hello, world!
+
+Arabic: مرحباً بالعالم
+
+French: Bonjour le monde
+
+Chinese: 你好，世界
+
+Japanese: こんにちは世界
+
+Korean: 안녕하세요 세계
+
+Emoji with skin tone: 👋🏽
+
+Right-to-left HTML:
+
+<div dir="rtl">
+هذا نص عربي مكتوب من اليمين إلى اليسار.
+</div>
+
+## Long Text and Special Characters
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+
+Special characters:
+
+`& < > " ' © ® ™ € £ ¥ ₿ → ← ↑ ↓ ≠ ≤ ≥ ± × ÷ ∞`
+
+## Comments
+
+<!-- This HTML comment should not be visible in the rendered output. -->
+
+Visible text before comment. <!-- hidden content --> Visible text after comment.
+
+## Embedded Media
+
+Video using HTML:
+
+<video controls width="480">
+  <source src="example.mp4" type="video/mp4">
+  Your browser does not support video.
+</video>
+
+Audio using HTML:
+
+<audio controls>
+  <source src="example.mp3" type="audio/mpeg">
+  Your browser does not support audio.
+</audio>
+
+YouTube iframe, if permitted:
+
+<iframe
+  width="560"
+  height="315"
+  src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+  title="YouTube video"
+  allowfullscreen>
+</iframe>
+
+## Custom Containers
+
+::: info
+Information container.
+:::
+
+::: tip
+Helpful tip container.
+:::
+
+::: danger
+Danger container.
+:::
+
+## Front Matter
+
+The following normally belongs at the very beginning of a file:
+
+```yaml
+---
+title: Markdown Feature Test
+author: Mohaned
+date: 2026-08-06
+tags:
+  - markdown
+  - testing
+draft: false
+---
+```
+
+## Final Rendering Stress Test
+
+> ### Markdown Renderer Test
+>
+> This combines **bold**, *italic*, ~~deleted text~~, `inline code`, and a [link](https://example.com).
+>
+> - [x] Parse Markdown
+> - [x] Render components
+> - [ ] Fix unsupported extensions
+>
+> ```javascript
+> const app = {
+>   name: "Noted",
+>   ready: true
+> };
+> ```
+>
+> | Component | Result |
+> |---|---|
+> | Blockquote | ✅ |
+> | Code | ✅ |
+> | Table | ✅ |
+
+---
+
+**End of Markdown test document.**
