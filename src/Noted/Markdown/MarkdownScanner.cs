@@ -9,23 +9,67 @@
 /// </summary>
 public static class MarkdownScanner
 {
-    public static MdLine ScanFenceDelimiter(string line)
+    /// <summary>Length of a line's leading single-level blockquote marker ("&gt; "), or 0 if it has none.
+    /// Lets the multi-line, whole-document constructs (fences, tables) — which otherwise scan raw,
+    /// un-stripped line text — nest one level inside a blockquote instead of only being recognised as
+    /// literal quoted prose.</summary>
+    public static int QuotePrefixLength(string text)
     {
+        int i = SkipWhitespace(text, 0);
+        if (i >= text.Length || text[i] != '>') return 0;
+        i++;
+        if (i < text.Length && text[i] == ' ') i++;
+        return i;
+    }
+
+    public static MdLine ScanFenceDelimiter(string line, int quotePrefixLength = 0)
+    {
+        if (quotePrefixLength <= 0)
+        {
+            return new MdLine
+            {
+                Block = MdStyle.CodeBlock,
+                Tokens = [new MdToken(0, line.Length, MdStyle.Marker | MdStyle.CodeBlock)],
+                AllMarkers = true,
+            };
+        }
+
+        var tokens = new List<MdToken>(2) { new MdToken(0, quotePrefixLength, MdStyle.Marker | MdStyle.Quote) };
+        if (line.Length > quotePrefixLength)
+            tokens.Add(new MdToken(quotePrefixLength, line.Length - quotePrefixLength, MdStyle.Marker | MdStyle.CodeBlock));
+
         return new MdLine
         {
-            Block = MdStyle.CodeBlock,
-            Tokens = [new MdToken(0, line.Length, MdStyle.Marker | MdStyle.CodeBlock)],
+            Block = MdStyle.CodeBlock | MdStyle.Quote,
+            QuoteDepth = 1,
+            ContentStart = quotePrefixLength,
+            Tokens = tokens,
             AllMarkers = true,
         };
     }
 
-    public static MdLine ScanFencedContent(string line)
+    public static MdLine ScanFencedContent(string line, int quotePrefixLength = 0)
     {
-        if (line.Length == 0) return new MdLine { Block = MdStyle.CodeBlock, Tokens = [] };
+        if (quotePrefixLength <= 0)
+        {
+            if (line.Length == 0) return new MdLine { Block = MdStyle.CodeBlock, Tokens = [] };
+            return new MdLine
+            {
+                Block = MdStyle.CodeBlock,
+                Tokens = [new MdToken(0, line.Length, MdStyle.CodeBlock)],
+            };
+        }
+
+        var tokens = new List<MdToken>(2) { new MdToken(0, quotePrefixLength, MdStyle.Marker | MdStyle.Quote) };
+        if (line.Length > quotePrefixLength)
+            tokens.Add(new MdToken(quotePrefixLength, line.Length - quotePrefixLength, MdStyle.CodeBlock));
+
         return new MdLine
         {
-            Block = MdStyle.CodeBlock,
-            Tokens = [new MdToken(0, line.Length, MdStyle.CodeBlock)],
+            Block = MdStyle.CodeBlock | MdStyle.Quote,
+            QuoteDepth = 1,
+            ContentStart = quotePrefixLength,
+            Tokens = tokens,
         };
     }
 
@@ -93,19 +137,21 @@ public static class MarkdownScanner
     /// horizontal rule: the characters fade out and a stroke is drawn where the row sits, giving
     /// the header a clean underline.
     /// </summary>
-    public static MdLine ScanTableDelimiter(string line)
+    public static MdLine ScanTableDelimiter(string line, int quotePrefixLength = 0)
     {
-        int i = SkipWhitespace(line, 0);
+        int i = SkipWhitespace(line, quotePrefixLength);
         int contentEnd = line.Length;
         while (contentEnd > i && (line[contentEnd - 1] == ' ' || line[contentEnd - 1] == '\t')) contentEnd--;
 
-        var tokens = new List<MdToken>(1);
+        var tokens = new List<MdToken>(2);
+        if (quotePrefixLength > 0) tokens.Add(new MdToken(0, quotePrefixLength, MdStyle.Marker | MdStyle.Quote));
         if (contentEnd > i)
             tokens.Add(new MdToken(i, contentEnd - i, MdStyle.Marker | MdStyle.Rule | MdStyle.Table | MdStyle.TableDelimiter));
 
         return new MdLine
         {
-            Block = MdStyle.Rule | MdStyle.Table | MdStyle.TableDelimiter,
+            Block = MdStyle.Rule | MdStyle.Table | MdStyle.TableDelimiter | (quotePrefixLength > 0 ? MdStyle.Quote : MdStyle.None),
+            QuoteDepth = quotePrefixLength > 0 ? 1 : 0,
             ContentStart = i,
             Tokens = tokens,
             AllMarkers = true,
@@ -117,10 +163,11 @@ public static class MarkdownScanner
     /// usual inline markup so bold, code and links work inside cells. The header row is flagged so
     /// the colorizer can weight it.
     /// </summary>
-    public static MdLine ScanTableRow(string line, bool header, IReadOnlySet<string>? refs = null)
+    public static MdLine ScanTableRow(string line, bool header, IReadOnlySet<string>? refs = null, int quotePrefixLength = 0)
     {
         var tokens = new List<MdToken>(8);
-        int i = SkipWhitespace(line, 0);
+        if (quotePrefixLength > 0) tokens.Add(new MdToken(0, quotePrefixLength, MdStyle.Marker | MdStyle.Quote));
+        int i = SkipWhitespace(line, quotePrefixLength);
 
         // Collect the unescaped pipe positions so the first and last can be marked as table edges.
         var pipes = new List<int>(4);
@@ -151,7 +198,9 @@ public static class MarkdownScanner
 
         return new MdLine
         {
-            Block = MdStyle.Table | (header ? MdStyle.TableHeader : MdStyle.None),
+            Block = MdStyle.Table | (header ? MdStyle.TableHeader : MdStyle.None) |
+                    (quotePrefixLength > 0 ? MdStyle.Quote : MdStyle.None),
+            QuoteDepth = quotePrefixLength > 0 ? 1 : 0,
             ContentStart = i,
             Tokens = tokens,
         };

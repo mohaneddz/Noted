@@ -81,9 +81,13 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
             double top = visualLine.VisualTop - textView.ScrollOffset.Y;
             double height = visualLine.Height;
 
+            // A fence or table nested one level inside a blockquote still carries the Quote flag —
+            // inset its panel fill past the quote bar instead of drawing under/through it.
+            double panelLeft = (info.Block & MdStyle.Quote) != 0 ? ContentX(textView, visualLine, info.ContentStart) : 0;
+
             if ((info.Block & MdStyle.CodeBlock) != 0)
             {
-                drawingContext.DrawRectangle(Theme.CodeBackground, null, new Rect(0, top, right, height + 0.5));
+                drawingContext.DrawRectangle(Theme.CodeBackground, null, new Rect(panelLeft, top, Math.Max(0, right - panelLeft), height + 0.5));
 
                 int lineNumber = visualLine.FirstDocumentLine.LineNumber;
                 if (HideMarkers &&
@@ -97,7 +101,7 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
 
             if ((info.Block & MdStyle.Table) != 0)
             {
-                drawingContext.DrawRectangle(Theme.Surface, null, new Rect(0, top, right, height + 0.5));
+                drawingContext.DrawRectangle(Theme.Surface, null, new Rect(panelLeft, top, Math.Max(0, right - panelLeft), height + 0.5));
             }
 
             if ((info.Block & (MdStyle.Quote | MdStyle.Callout)) != 0)

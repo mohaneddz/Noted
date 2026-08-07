@@ -190,8 +190,10 @@ public sealed class MarkdownAnalyzer
         var line = _document!.GetLineByNumber(lineNumber);
         string text = _document.GetText(line.Offset, line.Length);
 
-        if (_fences[lineNumber] == Fence.Delimiter) return MarkdownScanner.ScanFenceDelimiter(text);
-        if (_fences[lineNumber] == Fence.Inside) return MarkdownScanner.ScanFencedContent(text);
+        if (_fences[lineNumber] == Fence.Delimiter)
+            return MarkdownScanner.ScanFenceDelimiter(text, MarkdownScanner.QuotePrefixLength(text));
+        if (_fences[lineNumber] == Fence.Inside)
+            return MarkdownScanner.ScanFencedContent(text, MarkdownScanner.QuotePrefixLength(text));
 
         switch (_setext[lineNumber])
         {
@@ -207,11 +209,12 @@ public sealed class MarkdownAnalyzer
 
         if (_detailsTagLine[lineNumber]) return MarkdownScanner.ScanDetailsTag(text);
 
+        int tableQuote = MarkdownScanner.QuotePrefixLength(text);
         var scanned = _tables[lineNumber] switch
         {
-            TableRole.Header => MarkdownScanner.ScanTableRow(text, header: true, _refLabels),
-            TableRole.Delimiter => MarkdownScanner.ScanTableDelimiter(text),
-            TableRole.Row => MarkdownScanner.ScanTableRow(text, header: false, _refLabels),
+            TableRole.Header => MarkdownScanner.ScanTableRow(text, header: true, _refLabels, tableQuote),
+            TableRole.Delimiter => MarkdownScanner.ScanTableDelimiter(text, tableQuote),
+            TableRole.Row => MarkdownScanner.ScanTableRow(text, header: false, _refLabels, tableQuote),
             _ => MarkdownScanner.Scan(text, _refLabels),
         };
 
@@ -244,34 +247,53 @@ public sealed class MarkdownAnalyzer
         _tableBlocks = [];
         _detailsBlocks = [];
 
+        string TextOf(int number)
+        {
+            var l = _document.GetLineByNumber(number);
+            return _document.GetText(l.Offset, l.Length);
+        }
+
         bool inFence = false;
         char fenceChar = '`';
         int fenceLength = 0;
+        int fenceQuote = 0;
         int openLine = 0;
         string language = string.Empty;
+        int currentTableQuote = 0;
 
         for (int n = 1; n <= lineCount; n++)
         {
             var line = _document.GetLineByNumber(n);
-            int run = LeadingFenceRun(_document, line, out char c);
+            string raw = TextOf(n);
+            int qp = MarkdownScanner.QuotePrefixLength(raw);
 
             if (!inFence)
             {
+                int run = LeadingFenceRun(_document, line, line.Offset + qp, out char c);
                 if (run >= 3)
                 {
                     inFence = true;
                     fenceChar = c;
                     fenceLength = run;
+                    fenceQuote = qp;
                     openLine = n;
-                    language = ExtractLanguage(_document, line, run);
+                    language = ExtractLanguage(_document, line, qp, run);
                     _fences[n] = Fence.Delimiter;
                 }
             }
-            else if (run >= fenceLength && c == fenceChar)
+            else if (qp == fenceQuote)
             {
-                inFence = false;
-                _fences[n] = Fence.Delimiter;
-                CloseBlock(openLine, n, language);
+                int run = LeadingFenceRun(_document, line, line.Offset + qp, out char c);
+                if (run >= fenceLength && c == fenceChar)
+                {
+                    inFence = false;
+                    _fences[n] = Fence.Delimiter;
+                    CloseBlock(openLine, n, language);
+                }
+                else
+                {
+                    _fences[n] = Fence.Inside;
+                }
             }
             else
             {
@@ -280,16 +302,19 @@ public sealed class MarkdownAnalyzer
 
             // Tables live outside fences. A delimiter row (|---|:--:|) turns the line above it
             // into a header and every non-blank line below it into a body row, until a blank line.
+            // A single level of blockquote prefix is allowed as long as every row in the table shares it.
             if (_fences[n] == Fence.None && _tables[n] == TableRole.None)
             {
                 if (n > 1 && _fences[n - 1] == Fence.None && _tables[n - 1] == TableRole.None &&
-                    IsTableDelimiter(TextOf(n)) && HasContentAndPipe(TextOf(n - 1)))
+                    IsTableDelimiter(raw[qp..]) && MarkdownScanner.QuotePrefixLength(TextOf(n - 1)) == qp &&
+                    HasContentAndPipe(TextOf(n - 1)[qp..]))
                 {
                     _tables[n - 1] = TableRole.Header;
                     _tables[n] = TableRole.Delimiter;
+                    currentTableQuote = qp;
                 }
                 else if (n > 1 && _tables[n - 1] is TableRole.Delimiter or TableRole.Row &&
-                         TextOf(n).Trim().Length > 0)
+                         qp == currentTableQuote && raw.Trim().Length > 0)
                 {
                     _tables[n] = TableRole.Row;
                 }
@@ -305,12 +330,6 @@ public sealed class MarkdownAnalyzer
                 _setext[n - 1] = level == 1 ? Setext.Heading1 : Setext.Heading2;
                 _setext[n] = Setext.Underline;
             }
-        }
-
-        string TextOf(int number)
-        {
-            var l = _document.GetLineByNumber(number);
-            return _document.GetText(l.Offset, l.Length);
         }
 
         // Callouts: a "> [!NOTE]" header tints its whole blockquote, so the coloured bar runs the
@@ -346,7 +365,10 @@ public sealed class MarkdownAnalyzer
             if (_tables[n] != TableRole.Header) continue;
 
             int delimiter = n + 1;
-            var aligns = delimiter <= lineCount ? MarkdownScanner.ParseColumnAligns(TextOf(delimiter)) : [];
+            int headerQuote = MarkdownScanner.QuotePrefixLength(TextOf(n));
+            var aligns = delimiter <= lineCount
+                ? MarkdownScanner.ParseColumnAligns(TextOf(delimiter)[Math.Min(headerQuote, TextOf(delimiter).Length)..])
+                : [];
 
             int end = delimiter;
             for (int r = delimiter + 1; r <= lineCount && _tables[r] == TableRole.Row; r++) end = r;
@@ -593,9 +615,9 @@ public sealed class MarkdownAnalyzer
     }
 
     /// <summary>Text after the fence run on its opening line, e.g. <c>```csharp</c> → <c>csharp</c>.</summary>
-    private static string ExtractLanguage(TextDocument document, DocumentLine line, int fenceRun)
+    private static string ExtractLanguage(TextDocument document, DocumentLine line, int quotePrefixLength, int fenceRun)
     {
-        int offset = line.Offset;
+        int offset = line.Offset + quotePrefixLength;
         int indent = 0;
         while (offset < line.EndOffset && indent < 4 && document.GetCharAt(offset) == ' ') { offset++; indent++; }
 
@@ -604,11 +626,12 @@ public sealed class MarkdownAnalyzer
         return rest.Trim();
     }
 
-    /// <summary>Length of a leading ``` / ~~~ run, ignoring up to three spaces of indentation.</summary>
-    private static int LeadingFenceRun(TextDocument document, DocumentLine line, out char fenceChar)
+    /// <summary>Length of a leading ``` / ~~~ run starting at <paramref name="startOffset"/> (past any
+    /// blockquote prefix the caller has already skipped), ignoring up to three spaces of indentation.</summary>
+    private static int LeadingFenceRun(TextDocument document, DocumentLine line, int startOffset, out char fenceChar)
     {
         fenceChar = '`';
-        int offset = line.Offset;
+        int offset = startOffset;
         int endOffset = line.EndOffset;
 
         int indent = 0;

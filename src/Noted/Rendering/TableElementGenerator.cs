@@ -63,10 +63,14 @@ public sealed class TableElementGenerator : VisualLineElementGenerator, ICollaps
         if (!_analyzer.TryGetTableBlock(line.LineNumber, out int header, out int end, out var aligns)) return null;
         if (line.Offset != offset || line.LineNumber != header || end <= header) return null;
 
-        var headerCells = MarkdownScanner.SplitTableCells(TextOf(document, header));
+        // A table nested one level inside a blockquote carries a "> " prefix on every row — strip it
+        // before splitting cells, so the quote marker doesn't end up as literal text in the first column.
+        int quote = MarkdownScanner.QuotePrefixLength(TextOf(document, header));
+
+        var headerCells = MarkdownScanner.SplitTableCells(Unquote(TextOf(document, header), quote));
         var bodyRows = new List<List<string>>();
         for (int n = header + 2; n <= end; n++)   // header+1 is the delimiter row
-            bodyRows.Add(MarkdownScanner.SplitTableCells(TextOf(document, n)));
+            bodyRows.Add(MarkdownScanner.SplitTableCells(Unquote(TextOf(document, n), quote)));
 
         int columns = aligns.Length;
         columns = Math.Max(columns, headerCells.Count);
@@ -74,6 +78,7 @@ public sealed class TableElementGenerator : VisualLineElementGenerator, ICollaps
         if (columns == 0) return null;
 
         var container = BuildTable(headerCells, bodyRows, aligns, columns);
+        if (quote > 0) container.Margin = new Thickness(14, 4, 0, 6);
 
         var headerLine = document.GetLineByNumber(header);
         var endLine = document.GetLineByNumber(end);
@@ -85,6 +90,9 @@ public sealed class TableElementGenerator : VisualLineElementGenerator, ICollaps
         var line = document.GetLineByNumber(lineNumber);
         return document.GetText(line.Offset, line.Length);
     }
+
+    private static string Unquote(string text, int quotePrefixLength) =>
+        quotePrefixLength > 0 && quotePrefixLength <= text.Length ? text[quotePrefixLength..] : text;
 
     private FrameworkElement BuildTable(
         List<string> headerCells, List<List<string>> bodyRows, ColumnAlign[] aligns, int columns)
