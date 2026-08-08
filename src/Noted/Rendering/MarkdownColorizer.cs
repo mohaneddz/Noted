@@ -153,6 +153,14 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
             el.TextRunProperties.SetTextDecorations(TextDecorations.Underline);
         }
 
+        if ((style & MdStyle.Abbreviation) != 0)
+        {
+            var pen = new Pen(Theme.Muted, 1) { DashStyle = DashStyles.Dot };
+            var decoration = new TextDecoration(TextDecorationLocation.Underline, pen, 1,
+                TextDecorationUnit.Pixel, TextDecorationUnit.Pixel);
+            el.TextRunProperties.SetTextDecorations(new TextDecorationCollection { decoration });
+        }
+
         if ((style & (MdStyle.Sub | MdStyle.Sup)) != 0)
         {
             el.TextRunProperties.SetFontRenderingEmSize(el.TextRunProperties.FontRenderingEmSize * 0.78);

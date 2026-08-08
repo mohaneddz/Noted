@@ -163,7 +163,8 @@ public static class MarkdownScanner
     /// usual inline markup so bold, code and links work inside cells. The header row is flagged so
     /// the colorizer can weight it.
     /// </summary>
-    public static MdLine ScanTableRow(string line, bool header, IReadOnlySet<string>? refs = null, int quotePrefixLength = 0)
+    public static MdLine ScanTableRow(string line, bool header, IReadOnlySet<string>? refs = null, int quotePrefixLength = 0,
+        IReadOnlySet<string>? abbreviations = null)
     {
         var tokens = new List<MdToken>(8);
         if (quotePrefixLength > 0) tokens.Add(new MdToken(0, quotePrefixLength, MdStyle.Marker | MdStyle.Quote));
@@ -184,7 +185,7 @@ public static class MarkdownScanner
         for (int k = 0; k < pipes.Count; k++)
         {
             int pipe = pipes[k];
-            if (pipe > cellStart) ParseInline(line, cellStart, pipe, MdStyle.None, tokens, 0, refs);
+            if (pipe > cellStart) ParseInline(line, cellStart, pipe, MdStyle.None, tokens, 0, refs, abbreviations);
 
             bool leadingEdge = k == 0 && pipe == i;
             bool trailingEdge = k == pipes.Count - 1 && pipe == trimmedEnd - 1;
@@ -192,7 +193,7 @@ public static class MarkdownScanner
             tokens.Add(new MdToken(pipe, 1, style));
             cellStart = pipe + 1;
         }
-        if (cellStart < line.Length) ParseInline(line, cellStart, line.Length, MdStyle.None, tokens, 0, refs);
+        if (cellStart < line.Length) ParseInline(line, cellStart, line.Length, MdStyle.None, tokens, 0, refs, abbreviations);
 
         tokens.Sort((a, b) => a.Offset.CompareTo(b.Offset));
 
@@ -211,11 +212,12 @@ public static class MarkdownScanner
     /// Its prose is parsed for inline markup and the whole line is flagged as a heading of the
     /// given level so the colorizer weights and scales it like an ATX heading.
     /// </summary>
-    public static MdLine ScanSetextHeading(string line, int level, IReadOnlySet<string>? refs = null)
+    public static MdLine ScanSetextHeading(string line, int level, IReadOnlySet<string>? refs = null,
+        IReadOnlySet<string>? abbreviations = null)
     {
         var tokens = new List<MdToken>(8);
         int i = SkipWhitespace(line, 0);
-        ParseInline(line, i, line.Length, MdStyle.None, tokens, 0, refs);
+        ParseInline(line, i, line.Length, MdStyle.None, tokens, 0, refs, abbreviations);
 
         return new MdLine
         {
@@ -245,7 +247,7 @@ public static class MarkdownScanner
         };
     }
 
-    public static MdLine Scan(string line, IReadOnlySet<string>? refs = null)
+    public static MdLine Scan(string line, IReadOnlySet<string>? refs = null, IReadOnlySet<string>? abbreviations = null)
     {
         if (line.Length == 0) return MdLine.Empty;
 
@@ -348,7 +350,7 @@ public static class MarkdownScanner
             }
         }
 
-        ParseInline(line, i, line.Length, MdStyle.None, tokens, 0, refs);
+        ParseInline(line, i, line.Length, MdStyle.None, tokens, 0, refs, abbreviations);
 
         bool allMarkers = true;
         int covered = 0;
@@ -375,7 +377,7 @@ public static class MarkdownScanner
     private const int MaxInlineDepth = 8;
 
     private static void ParseInline(string s, int start, int end, MdStyle inherit, List<MdToken> output, int depth,
-        IReadOnlySet<string>? refs = null)
+        IReadOnlySet<string>? refs = null, IReadOnlySet<string>? abbreviations = null)
     {
         if (start >= end) return;
         if (depth > MaxInlineDepth)
@@ -396,6 +398,16 @@ public static class MarkdownScanner
         while (i < end)
         {
             char c = s[i];
+
+            if (abbreviations is { Count: > 0 } && (i == start || !IsWordChar(s[i - 1])) &&
+                MatchAbbreviation(s, i, end, abbreviations) is int abbrevEnd)
+            {
+                Flush(i);
+                output.Add(new MdToken(i, abbrevEnd - i, inherit | MdStyle.Abbreviation));
+                i = abbrevEnd;
+                plain = i;
+                continue;
+            }
 
             switch (c)
             {
@@ -437,7 +449,7 @@ public static class MarkdownScanner
                     };
                     Flush(i);
                     output.Add(new MdToken(i, run, MdStyle.Marker | inherit | emphasis));
-                    ParseInline(s, i + run, close, inherit | emphasis, output, depth + 1, refs);
+                    ParseInline(s, i + run, close, inherit | emphasis, output, depth + 1, refs, abbreviations);
                     output.Add(new MdToken(close, run, MdStyle.Marker | inherit | emphasis));
                     i = close + run;
                     plain = i;
@@ -450,7 +462,7 @@ public static class MarkdownScanner
                     if (close < 0) break;
                     Flush(i);
                     output.Add(new MdToken(i, 2, MdStyle.Marker | inherit | MdStyle.Strike));
-                    ParseInline(s, i + 2, close, inherit | MdStyle.Strike, output, depth + 1, refs);
+                    ParseInline(s, i + 2, close, inherit | MdStyle.Strike, output, depth + 1, refs, abbreviations);
                     output.Add(new MdToken(close, 2, MdStyle.Marker | inherit | MdStyle.Strike));
                     i = close + 2;
                     plain = i;
@@ -489,7 +501,7 @@ public static class MarkdownScanner
                     if (close < 0) break;
                     Flush(i);
                     output.Add(new MdToken(i, 2, MdStyle.Marker | inherit | MdStyle.Highlight));
-                    ParseInline(s, i + 2, close, inherit | MdStyle.Highlight, output, depth + 1, refs);
+                    ParseInline(s, i + 2, close, inherit | MdStyle.Highlight, output, depth + 1, refs, abbreviations);
                     output.Add(new MdToken(close, 2, MdStyle.Marker | inherit | MdStyle.Highlight));
                     i = close + 2;
                     plain = i;
@@ -513,8 +525,8 @@ public static class MarkdownScanner
                 case '[':
                 {
                     Flush(i);
-                    if (TryParseLink(s, i, end, inherit, output, depth, refs, out int linkEnd) ||
-                        TryParseReference(s, i, end, inherit, output, depth, refs, out linkEnd))
+                    if (TryParseLink(s, i, end, inherit, output, depth, refs, abbreviations, out int linkEnd) ||
+                        TryParseReference(s, i, end, inherit, output, depth, refs, abbreviations, out linkEnd))
                     {
                         i = linkEnd;
                         plain = i;
@@ -548,7 +560,8 @@ public static class MarkdownScanner
     }
 
     private static bool TryParseLink(
-        string s, int i, int end, MdStyle inherit, List<MdToken> output, int depth, IReadOnlySet<string>? refs, out int linkEnd)
+        string s, int i, int end, MdStyle inherit, List<MdToken> output, int depth, IReadOnlySet<string>? refs,
+        IReadOnlySet<string>? abbreviations, out int linkEnd)
     {
         linkEnd = i;
         int bang = s[i] == '!' ? 1 : 0;
@@ -565,7 +578,7 @@ public static class MarkdownScanner
 
         output.Add(new MdToken(i, open + 1 - i, MdStyle.Marker | MdStyle.Link));
         if (labelEnd > open + 1)
-            ParseInline(s, open + 1, labelEnd, linkStyle, output, depth + 1, refs);
+            ParseInline(s, open + 1, labelEnd, linkStyle, output, depth + 1, refs, abbreviations);
         output.Add(new MdToken(labelEnd, urlEnd + 1 - labelEnd, MdStyle.Marker | MdStyle.Url));
 
         linkEnd = urlEnd + 1;
@@ -576,7 +589,8 @@ public static class MarkdownScanner
     /// <c>[id]</c> — but only when <paramref name="id"/> matches a known reference definition, so ordinary
     /// bracketed prose is left alone. The visible label shows as a link; the <c>[id]</c> tail is hidden.</summary>
     private static bool TryParseReference(
-        string s, int i, int end, MdStyle inherit, List<MdToken> output, int depth, IReadOnlySet<string>? refs, out int linkEnd)
+        string s, int i, int end, MdStyle inherit, List<MdToken> output, int depth, IReadOnlySet<string>? refs,
+        IReadOnlySet<string>? abbreviations, out int linkEnd)
     {
         linkEnd = i;
         if (refs is null || refs.Count == 0) return false;
@@ -611,7 +625,7 @@ public static class MarkdownScanner
 
         var linkStyle = inherit | MdStyle.Link | (bang == 1 ? MdStyle.Image : MdStyle.None);
         output.Add(new MdToken(i, open + 1 - i, MdStyle.Marker | MdStyle.Link));       // "[" or "!["
-        ParseInline(s, open + 1, labelEnd, linkStyle, output, depth + 1, refs);        // the shown label
+        ParseInline(s, open + 1, labelEnd, linkStyle, output, depth + 1, refs, abbreviations);        // the shown label
         output.Add(new MdToken(labelEnd, constructEnd - labelEnd, MdStyle.Marker | MdStyle.Url));  // "]" (+ "[id]")
 
         linkEnd = constructEnd;
@@ -642,6 +656,60 @@ public static class MarkdownScanner
 
         label = line.Substring(i + 1, close - (i + 1));
         return true;
+    }
+
+    /// <summary>If the line is an abbreviation definition (<c>*[TERM]: expansion</c>), returns its term.</summary>
+    public static bool TryReadAbbreviationDefinition(string line, out string term)
+    {
+        term = string.Empty;
+        int i = SkipWhitespace(line, 0);
+        if (i + 1 >= line.Length || line[i] != '*' || line[i + 1] != '[') return false;
+
+        int close = line.IndexOf(']', i + 2);
+        if (close <= i + 2) return false;
+
+        int colon = close + 1;
+        if (colon >= line.Length || line[colon] != ':') return false;
+        if (SkipWhitespace(line, colon + 1) >= line.Length) return false;   // needs an expansion
+
+        term = line.Substring(i + 2, close - (i + 2)).Trim();
+        return term.Length > 0;
+    }
+
+    /// <summary>Styles an abbreviation definition line: the <c>*[TERM]:</c> marker fades, the term and its
+    /// expansion stay readable as dim metadata (matching a link reference definition's treatment).</summary>
+    public static MdLine ScanAbbreviationDefinition(string line)
+    {
+        int i = SkipWhitespace(line, 0);
+        var tokens = new List<MdToken>(1);
+        if (line.Length > i)
+            tokens.Add(new MdToken(i, line.Length - i, MdStyle.Marker | MdStyle.Url));
+
+        return new MdLine
+        {
+            ContentStart = i,
+            Tokens = tokens,
+            AllMarkers = true,
+        };
+    }
+
+    /// <summary>If a known abbreviation term starts at <paramref name="i"/>, returns its exclusive end
+    /// offset (the longest matching term, requiring a non-word character or end-of-span afterward).</summary>
+    private static int? MatchAbbreviation(string s, int i, int end, IReadOnlySet<string> abbreviations)
+    {
+        int? best = null;
+        foreach (string term in abbreviations)
+        {
+            if (term.Length == 0 || i + term.Length > end) continue;
+            if (best is int b && term.Length <= b - i) continue;
+            if (string.CompareOrdinal(s, i, term, 0, term.Length) != 0) continue;
+
+            int after = i + term.Length;
+            if (after < end && IsWordChar(s[after])) continue;
+
+            best = after;
+        }
+        return best;
     }
 
     /// <summary>Splits a table row into its cell texts, honouring <c>\|</c> escapes and dropping the empty

@@ -29,6 +29,8 @@ public sealed class MarkdownAnalyzer
     private Directive[] _directives = [];
     private bool[] _refDef = [];
     private HashSet<string> _refLabels = new(StringComparer.Ordinal);
+    private bool[] _abbrevDef = [];
+    private HashSet<string> _abbrevTerms = new(StringComparer.Ordinal);
     private int[] _blockStart = [];
     private int[] _mathStart = [];
     private List<(int Start, int End)> _mathBlocks = [];
@@ -197,12 +199,13 @@ public sealed class MarkdownAnalyzer
 
         switch (_setext[lineNumber])
         {
-            case Setext.Heading1: return MarkdownScanner.ScanSetextHeading(text, 1, _refLabels);
-            case Setext.Heading2: return MarkdownScanner.ScanSetextHeading(text, 2, _refLabels);
+            case Setext.Heading1: return MarkdownScanner.ScanSetextHeading(text, 1, _refLabels, _abbrevTerms);
+            case Setext.Heading2: return MarkdownScanner.ScanSetextHeading(text, 2, _refLabels, _abbrevTerms);
             case Setext.Underline: return MarkdownScanner.ScanSetextUnderline(text);
         }
 
         if (_refDef[lineNumber]) return MarkdownScanner.ScanReferenceDefinition(text);
+        if (_abbrevDef[lineNumber]) return MarkdownScanner.ScanAbbreviationDefinition(text);
 
         if (_directives[lineNumber] is Directive.Open or Directive.Close)
             return MarkdownScanner.ScanDirectiveDelimiter(text);
@@ -212,10 +215,10 @@ public sealed class MarkdownAnalyzer
         int tableQuote = MarkdownScanner.QuotePrefixLength(text);
         var scanned = _tables[lineNumber] switch
         {
-            TableRole.Header => MarkdownScanner.ScanTableRow(text, header: true, _refLabels, tableQuote),
+            TableRole.Header => MarkdownScanner.ScanTableRow(text, header: true, _refLabels, tableQuote, _abbrevTerms),
             TableRole.Delimiter => MarkdownScanner.ScanTableDelimiter(text, tableQuote),
-            TableRole.Row => MarkdownScanner.ScanTableRow(text, header: false, _refLabels, tableQuote),
-            _ => MarkdownScanner.Scan(text, _refLabels),
+            TableRole.Row => MarkdownScanner.ScanTableRow(text, header: false, _refLabels, tableQuote, _abbrevTerms),
+            _ => MarkdownScanner.Scan(text, _refLabels, _abbrevTerms),
         };
 
         // A directive's body prose isn't marked up specially — it just needs to carry the Callout
@@ -237,6 +240,8 @@ public sealed class MarkdownAnalyzer
         _directives = new Directive[lineCount + 1];
         _refDef = new bool[lineCount + 1];
         _refLabels = new HashSet<string>(StringComparer.Ordinal);
+        _abbrevDef = new bool[lineCount + 1];
+        _abbrevTerms = new HashSet<string>(StringComparer.Ordinal);
         _blockStart = new int[lineCount + 1];
         _mathStart = new int[lineCount + 1];
         _tableStart = new int[lineCount + 1];
@@ -355,6 +360,18 @@ public sealed class MarkdownAnalyzer
             {
                 _refDef[n] = true;
                 _refLabels.Add(MarkdownScanner.NormalizeReferenceLabel(label));
+            }
+        }
+
+        // Abbreviation definitions: *[TERM]: expansion. Collect the terms so inline prose can
+        // recognise and style each occurrence, and flag the line so it renders as dim metadata.
+        for (int n = 1; n <= lineCount; n++)
+        {
+            if (_fences[n] != Fence.None || _tables[n] != TableRole.None || _setext[n] != Setext.None) continue;
+            if (MarkdownScanner.TryReadAbbreviationDefinition(TextOf(n), out string term))
+            {
+                _abbrevDef[n] = true;
+                _abbrevTerms.Add(term);
             }
         }
 
