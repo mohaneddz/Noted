@@ -97,9 +97,10 @@ public static class MarkdownScanner
     }
 
     /// <summary>
-    /// A fenced directive's opening (<c>::: note</c>) or closing (<c>:::</c>) line. The whole line
-    /// is a marker — same treatment as a code-fence delimiter — so it fades to dim text instead of
-    /// rendering as prose.
+    /// A fenced directive's opening (<c>::: note</c>) or closing (<c>:::</c>) line. The <c>:::</c>
+    /// run is a marker that hides like any other syntax; an opening line's directive name stays as
+    /// visible content, styled the same bold accent colour as a <c>&gt; [!NOTE]</c> label so both
+    /// admonition spellings read as one consistent "title".
     /// </summary>
     public static MdLine ScanDirectiveDelimiter(string line)
     {
@@ -107,15 +108,19 @@ public static class MarkdownScanner
         int end = line.Length;
         while (end > i && (line[end - 1] == ' ' || line[end - 1] == '\t')) end--;
 
-        var tokens = new List<MdToken>(1);
-        if (end > i) tokens.Add(new MdToken(i, end - i, MdStyle.Marker | MdStyle.Callout));
+        var tokens = new List<MdToken>(2);
+        int colonRun = 0;
+        while (i + colonRun < end && line[i + colonRun] == ':') colonRun++;
+        if (colonRun > 0) tokens.Add(new MdToken(i, colonRun, MdStyle.Marker | MdStyle.Callout));
+
+        int labelStart = SkipWhitespace(line, i + colonRun);
+        if (labelStart < end) tokens.Add(new MdToken(labelStart, end - labelStart, MdStyle.Callout));
 
         return new MdLine
         {
             Block = MdStyle.Callout,
             ContentStart = i,
             Tokens = tokens,
-            AllMarkers = true,
         };
     }
 

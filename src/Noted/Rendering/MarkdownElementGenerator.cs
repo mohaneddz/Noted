@@ -35,9 +35,9 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
         int lineOffset = visualLine.FirstDocumentLine.Offset;
 
         int lineNumber = documentLine.LineNumber;
-        bool revealed = _reveal.IsRevealed(lineNumber);
-
         var info = _analyzer.GetLine(lineNumber);
+        bool revealed = IsEffectivelyRevealed(lineNumber, info);
+
         foreach (var token in info.Tokens)
         {
             int absolute = lineOffset + token.Offset;
@@ -48,15 +48,25 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
         return -1;
     }
 
+    /// <summary>Like <see cref="RevealTracker.IsRevealed"/>, but a blockquote reveals as a whole block
+    /// so its "&gt; " markers don't pop in and out one line at a time as the caret moves through it.</summary>
+    private bool IsEffectivelyRevealed(int lineNumber, MdLine info)
+    {
+        if (_reveal.IsRevealed(lineNumber)) return true;
+        if ((info.Block & MdStyle.Quote) != 0 && _analyzer.TryGetQuoteBlock(lineNumber, out int start, out int end))
+            return _reveal.IsRangeRevealed(start, end);
+        return false;
+    }
+
     public override VisualLineElement? ConstructElement(int offset)
     {
         var visualLine = CurrentContext.VisualLine;
         var documentLine = visualLine.LastDocumentLine;
         int lineOffset = visualLine.FirstDocumentLine.Offset;
         int lineNumber = documentLine.LineNumber;
-        bool revealed = _reveal.IsRevealed(lineNumber);
-
         var info = _analyzer.GetLine(lineNumber);
+        bool revealed = IsEffectivelyRevealed(lineNumber, info);
+
         foreach (var token in info.Tokens)
         {
             if (lineOffset + token.Offset != offset) continue;

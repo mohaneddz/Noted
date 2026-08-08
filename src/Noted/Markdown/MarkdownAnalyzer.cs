@@ -572,6 +572,21 @@ public sealed class MarkdownAnalyzer
         return true;
     }
 
+    /// <summary>If <paramref name="lineNumber"/> sits inside a blockquote, returns the contiguous run of
+    /// quoted lines it belongs to (inclusive) — used so the whole quote reveals its raw markers together
+    /// when the caret enters it, rather than one line popping open at a time as the caret moves through it.</summary>
+    public bool TryGetQuoteBlock(int lineNumber, out int startLine, out int endLine)
+    {
+        startLine = endLine = lineNumber;
+        if (_document is null) return false;
+        if (lineNumber < 1 || lineNumber > _document.LineCount) return false;
+        if ((GetLine(lineNumber).Block & MdStyle.Quote) == 0) return false;
+
+        while (startLine > 1 && (GetLine(startLine - 1).Block & MdStyle.Quote) != 0) startLine--;
+        while (endLine < _document.LineCount && (GetLine(endLine + 1).Block & MdStyle.Quote) != 0) endLine++;
+        return true;
+    }
+
     /// <summary>Reads a line's callout kind by reusing the scanner's own <c>[!TYPE]</c> recognition.</summary>
     private static CalloutKind CalloutHeaderKind(string text)
     {

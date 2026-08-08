@@ -28,6 +28,13 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
         if (info.Tokens.Count == 0 && info.Block == MdStyle.None) return;
 
         bool revealed = _reveal.IsRevealed(line.LineNumber);
+        // A blockquote reveals as a whole block, not one line at a time, so its "> " markers don't
+        // pop in and out individually as the caret moves down through it.
+        if (!revealed && (info.Block & MdStyle.Quote) != 0 &&
+            _analyzer.TryGetQuoteBlock(line.LineNumber, out int quoteStart, out int quoteEnd))
+        {
+            revealed = _reveal.IsRangeRevealed(quoteStart, quoteEnd);
+        }
         var calloutKind = (info.Block & MdStyle.Callout) != 0 ? _analyzer.GetCallout(line.LineNumber) : CalloutKind.None;
         int lineStart = line.Offset;
         int lineEnd = line.EndOffset;
