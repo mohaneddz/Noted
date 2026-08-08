@@ -79,6 +79,7 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
                 Treatment.TaskOpen => Glyph("☐ ", token.Length, Theme.Muted),
                 Treatment.TaskDone => Glyph("☑ ", token.Length, Theme.Accent),
                 Treatment.TablePipe => Glyph("│", token.Length, Theme.Faint),
+                Treatment.DefinitionIndent => Glyph("     ", token.Length, Theme.Muted),
                 Treatment.Subscript => Script(offset, token.Length, up: false),
                 Treatment.Superscript => Script(offset, token.Length, up: true),
                 _ => null,
@@ -88,7 +89,7 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
         return null;
     }
 
-    private enum Treatment { Keep, Hide, QuoteIndent, Bullet, TaskOpen, TaskDone, TablePipe, Subscript, Superscript }
+    private enum Treatment { Keep, Hide, QuoteIndent, Bullet, TaskOpen, TaskDone, TablePipe, Subscript, Superscript, DefinitionIndent }
 
     private Treatment Classify(MdToken token, MdLine info, int lineNumber, bool lineRevealed)
     {
@@ -124,6 +125,8 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
         // "> " shrinks to a blank indent rather than vanishing, leaving room for the quote bar.
         if ((token.Style & MdStyle.Quote) != 0)
             return info.AllMarkers ? Treatment.Keep : Treatment.QuoteIndent;
+
+        if ((token.Style & MdStyle.DefinitionMarker) != 0) return Treatment.DefinitionIndent;
 
         if ((token.Style & MdStyle.Task) != 0)
             return (token.Style & MdStyle.TaskChecked) != 0 ? Treatment.TaskDone : Treatment.TaskOpen;

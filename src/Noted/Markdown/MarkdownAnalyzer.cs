@@ -17,6 +17,8 @@ public sealed class MarkdownAnalyzer
 
     private enum Directive : byte { None, Open, Body, Close }
 
+    private enum DefinitionRole : byte { None, Term, Marker }
+
     /// <summary>One fenced code block, from its opening delimiter line to its closing one.</summary>
     private readonly record struct FenceBlock(int StartLine, int EndLine, string Language);
 
@@ -31,6 +33,7 @@ public sealed class MarkdownAnalyzer
     private HashSet<string> _refLabels = new(StringComparer.Ordinal);
     private bool[] _abbrevDef = [];
     private HashSet<string> _abbrevTerms = new(StringComparer.Ordinal);
+    private DefinitionRole[] _definitions = [];
     private int[] _blockStart = [];
     private int[] _mathStart = [];
     private List<(int Start, int End)> _mathBlocks = [];
@@ -206,6 +209,8 @@ public sealed class MarkdownAnalyzer
 
         if (_refDef[lineNumber]) return MarkdownScanner.ScanReferenceDefinition(text);
         if (_abbrevDef[lineNumber]) return MarkdownScanner.ScanAbbreviationDefinition(text);
+        if (_definitions[lineNumber] == DefinitionRole.Marker)
+            return MarkdownScanner.ScanDefinition(text, _refLabels, _abbrevTerms);
 
         if (_directives[lineNumber] is Directive.Open or Directive.Close)
             return MarkdownScanner.ScanDirectiveDelimiter(text);
@@ -220,6 +225,8 @@ public sealed class MarkdownAnalyzer
             TableRole.Row => MarkdownScanner.ScanTableRow(text, header: false, _refLabels, tableQuote, _abbrevTerms),
             _ => MarkdownScanner.Scan(text, _refLabels, _abbrevTerms),
         };
+
+        if (_definitions[lineNumber] == DefinitionRole.Term) scanned = MarkdownScanner.WithDefinitionTerm(scanned);
 
         // A directive's body prose isn't marked up specially — it just needs to carry the Callout
         // flag so the background renderer keeps drawing the tinted frame across its blank lines too.
@@ -242,6 +249,7 @@ public sealed class MarkdownAnalyzer
         _refLabels = new HashSet<string>(StringComparer.Ordinal);
         _abbrevDef = new bool[lineCount + 1];
         _abbrevTerms = new HashSet<string>(StringComparer.Ordinal);
+        _definitions = new DefinitionRole[lineCount + 1];
         _blockStart = new int[lineCount + 1];
         _mathStart = new int[lineCount + 1];
         _tableStart = new int[lineCount + 1];
@@ -373,6 +381,25 @@ public sealed class MarkdownAnalyzer
                 _abbrevDef[n] = true;
                 _abbrevTerms.Add(term);
             }
+        }
+
+        // Definition lists: a plain paragraph line immediately followed by one or more ": definition"
+        // lines turns the paragraph into a term and the colon lines into its definitions.
+        for (int n = 1; n < lineCount; n++)
+        {
+            if (_fences[n] != Fence.None || _tables[n] != TableRole.None || _setext[n] != Setext.None ||
+                _definitions[n] != DefinitionRole.None) continue;
+            if (!IsPlainParagraph(TextOf(n))) continue;
+            if (_fences[n + 1] != Fence.None || !IsDefinitionLine(TextOf(n + 1))) continue;
+
+            _definitions[n] = DefinitionRole.Term;
+            int m = n + 1;
+            while (m <= lineCount && _fences[m] == Fence.None && IsDefinitionLine(TextOf(m)))
+            {
+                _definitions[m] = DefinitionRole.Marker;
+                m++;
+            }
+            n = m - 1;
         }
 
         // Group the per-line table roles into whole-table blocks, capturing each table's column
@@ -631,6 +658,14 @@ public sealed class MarkdownAnalyzer
         if (text.Trim().Length == 0) return false;
         var info = MarkdownScanner.Scan(text);
         return info.Block == MdStyle.None && info.HeadingLevel == 0;
+    }
+
+    /// <summary>True if the line opens with a <c>: </c> (or bare <c>:</c>) definition marker.</summary>
+    private static bool IsDefinitionLine(string text)
+    {
+        int i = 0;
+        while (i < text.Length && (text[i] == ' ' || text[i] == '\t')) i++;
+        return i < text.Length && text[i] == ':' && (i + 1 >= text.Length || text[i + 1] == ' ' || text[i + 1] == '\t');
     }
 
     /// <summary>True if the line has visible text and at least one unescaped pipe — the shape of a table row.</summary>

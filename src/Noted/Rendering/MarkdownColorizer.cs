@@ -80,6 +80,14 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
                 Restyle(el, weight: FontWeights.Bold);
             });
         }
+        else if ((info.Block & MdStyle.DefinitionTerm) != 0)
+        {
+            ChangeLinePart(lineStart, lineEnd, el =>
+            {
+                el.TextRunProperties.SetForegroundBrush(Theme.Heading);
+                Restyle(el, weight: FontWeights.Bold);
+            });
+        }
 
         foreach (var token in info.Tokens)
         {

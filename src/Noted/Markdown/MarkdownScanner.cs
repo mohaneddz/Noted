@@ -137,6 +137,41 @@ public static class MarkdownScanner
         AllMarkers = line.AllMarkers,
     };
 
+    /// <summary>Copies a scanned line, adding the <see cref="MdStyle.DefinitionTerm"/> block flag — used
+    /// for a definition list's term line (a plain paragraph immediately followed by one or more
+    /// <c>: definition</c> lines), so it renders bold like a small heading.</summary>
+    public static MdLine WithDefinitionTerm(MdLine line) => new()
+    {
+        Block = line.Block | MdStyle.DefinitionTerm,
+        HeadingLevel = line.HeadingLevel,
+        QuoteDepth = line.QuoteDepth,
+        ContentStart = line.ContentStart,
+        Tokens = line.Tokens,
+        AllMarkers = line.AllMarkers,
+    };
+
+    /// <summary>A definition list's <c>: definition</c> line: the leading <c>: </c> hides like a list
+    /// marker (replaced by an indent) and the remainder is parsed as ordinary inline prose.</summary>
+    public static MdLine ScanDefinition(string line, IReadOnlySet<string>? refs = null,
+        IReadOnlySet<string>? abbreviations = null)
+    {
+        int i = SkipWhitespace(line, 0);
+        var tokens = new List<MdToken>(8);
+
+        int markerEnd = i + 1;
+        if (markerEnd < line.Length && (line[markerEnd] == ' ' || line[markerEnd] == '\t')) markerEnd++;
+        tokens.Add(new MdToken(i, markerEnd - i, MdStyle.Marker | MdStyle.DefinitionMarker));
+
+        ParseInline(line, markerEnd, line.Length, MdStyle.None, tokens, 0, refs, abbreviations);
+
+        return new MdLine
+        {
+            Block = MdStyle.DefinitionMarker,
+            ContentStart = markerEnd,
+            Tokens = tokens,
+        };
+    }
+
     /// <summary>
     /// A table's delimiter row (<c>|:---|---:|</c>). It carries no prose, so it is treated like a
     /// horizontal rule: the characters fade out and a stroke is drawn where the row sits, giving
