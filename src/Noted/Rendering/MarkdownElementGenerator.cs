@@ -69,6 +69,8 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
                 Treatment.TaskOpen => Glyph("☐ ", token.Length, Theme.Muted),
                 Treatment.TaskDone => Glyph("☑ ", token.Length, Theme.Accent),
                 Treatment.TablePipe => Glyph("│", token.Length, Theme.Faint),
+                Treatment.Subscript => Script(offset, token.Length, up: false),
+                Treatment.Superscript => Script(offset, token.Length, up: true),
                 _ => null,
             };
         }
@@ -76,10 +78,13 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
         return null;
     }
 
-    private enum Treatment { Keep, Hide, QuoteIndent, Bullet, TaskOpen, TaskDone, TablePipe }
+    private enum Treatment { Keep, Hide, QuoteIndent, Bullet, TaskOpen, TaskDone, TablePipe, Subscript, Superscript }
 
     private Treatment Classify(MdToken token, MdLine info, int lineNumber, bool lineRevealed)
     {
+        if (!lineRevealed && !token.IsMarker && (token.Style & (MdStyle.Sub | MdStyle.Sup)) != 0)
+            return (token.Style & MdStyle.Sub) != 0 ? Treatment.Subscript : Treatment.Superscript;
+
         if (!token.IsMarker) return Treatment.Keep;
 
         // Fence delimiters collapse together with the rest of their block, and pop back
@@ -136,5 +141,26 @@ public sealed class MarkdownElementGenerator : VisualLineElementGenerator
             dpi);
 
         return new GlyphTextElement(text, documentLength);
+    }
+
+    private VisualLineElement Script(int offset, int documentLength, bool up)
+    {
+        var properties = CurrentContext.GlobalTextRunProperties;
+        var document = CurrentContext.Document;
+        string content = document.GetText(offset, documentLength);
+        double dpi = VisualTreeHelper.GetDpi(CurrentContext.TextView).PixelsPerDip;
+        double lineHeight = properties.FontRenderingEmSize;
+
+        var text = new FormattedText(
+            content,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            properties.Typeface,
+            lineHeight * 0.72,
+            Theme.Muted,
+            dpi);
+
+        double shift = up ? -lineHeight * 0.32 : lineHeight * 0.18;
+        return new ScriptTextElement(text, documentLength, shift, lineHeight);
     }
 }

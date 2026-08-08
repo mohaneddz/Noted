@@ -457,6 +457,32 @@ public static class MarkdownScanner
                     continue;
                 }
 
+                case '~':
+                {
+                    int close = FindRun(s, i + 1, end, '~', 1, exact: true);
+                    if (close < 0 || close == i + 1) break;
+                    Flush(i);
+                    output.Add(new MdToken(i, 1, MdStyle.Marker | inherit | MdStyle.Sub));
+                    Emit(output, i + 1, close - (i + 1), inherit | MdStyle.Sub);
+                    output.Add(new MdToken(close, 1, MdStyle.Marker | inherit | MdStyle.Sub));
+                    i = close + 1;
+                    plain = i;
+                    continue;
+                }
+
+                case '^':
+                {
+                    int close = FindRun(s, i + 1, end, '^', 1, exact: true);
+                    if (close < 0 || close == i + 1) break;
+                    Flush(i);
+                    output.Add(new MdToken(i, 1, MdStyle.Marker | inherit | MdStyle.Sup));
+                    Emit(output, i + 1, close - (i + 1), inherit | MdStyle.Sup);
+                    output.Add(new MdToken(close, 1, MdStyle.Marker | inherit | MdStyle.Sup));
+                    i = close + 1;
+                    plain = i;
+                    continue;
+                }
+
                 case '=' when i + 1 < end && s[i + 1] == '=':
                 {
                     int close = FindPair(s, i + 2, end, '=');

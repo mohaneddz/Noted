@@ -31,6 +31,11 @@ public enum MdStyle
     TableEdge = 1 << 20,
     Callout = 1 << 21,
     Footnote = 1 << 22,
+    Sub = 1 << 23,
+    Sup = 1 << 24,
+    Abbreviation = 1 << 25,
+    DefinitionTerm = 1 << 26,
+    DefinitionMarker = 1 << 27,
 }
 
 /// <summary>Per-column text alignment, read from a table's <c>:---</c> / <c>:--:</c> / <c>---:</c> delimiter row.</summary>

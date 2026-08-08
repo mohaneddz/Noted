@@ -85,3 +85,60 @@ internal sealed class EmbeddedRun : TextEmbeddedObject
         if (_glyph is not null) drawingContext.DrawText(_glyph, new Point(origin.X, origin.Y - _glyph.Baseline));
     }
 }
+
+/// <summary>Draws a run of text shrunk and shifted off the baseline — subscript or superscript.
+/// The underlying document text is unchanged; only the drawn position moves.</summary>
+public sealed class ScriptTextElement : VisualLineElement
+{
+    private readonly FormattedText _text;
+    private readonly double _shift;
+    private readonly double _lineHeight;
+
+    public ScriptTextElement(FormattedText text, int documentLength, double shift, double lineHeight)
+        : base(1, documentLength)
+    {
+        _text = text;
+        _shift = shift;
+        _lineHeight = lineHeight;
+    }
+
+    public override TextRun CreateTextRun(int startVisualColumn, ITextRunConstructionContext context)
+        => new ScriptRun(_text, TextRunProperties, _shift, _lineHeight);
+}
+
+internal sealed class ScriptRun : TextEmbeddedObject
+{
+    private readonly FormattedText _text;
+    private readonly TextRunProperties _properties;
+    private readonly double _shift;
+    private readonly double _lineHeight;
+
+    public ScriptRun(FormattedText text, TextRunProperties properties, double shift, double lineHeight)
+    {
+        _text = text;
+        _properties = properties;
+        _shift = shift;
+        _lineHeight = lineHeight;
+    }
+
+    public override LineBreakCondition BreakBefore => LineBreakCondition.BreakRestrained;
+
+    public override LineBreakCondition BreakAfter => LineBreakCondition.BreakRestrained;
+
+    public override bool HasFixedSize => true;
+
+    public override CharacterBufferReference CharacterBufferReference => default;
+
+    public override int Length => 1;
+
+    public override TextRunProperties Properties => _properties;
+
+    public override TextEmbeddedObjectMetrics Format(double remainingParagraphWidth)
+        => new(_text.WidthIncludingTrailingWhitespace, _lineHeight, _lineHeight * 0.8);
+
+    public override Rect ComputeBoundingBox(bool rightToLeft, bool sideways)
+        => new(0, -_lineHeight * 0.8, _text.WidthIncludingTrailingWhitespace, _lineHeight);
+
+    public override void Draw(DrawingContext drawingContext, Point origin, bool rightToLeft, bool sideways)
+        => drawingContext.DrawText(_text, new Point(origin.X, origin.Y - _text.Baseline + _shift));
+}
