@@ -75,11 +75,24 @@ public sealed class BlockDecorationRenderer : IBackgroundRenderer
 
         foreach (var visualLine in textView.VisualLines)
         {
-            var info = _analyzer.GetLine(visualLine.FirstDocumentLine.LineNumber);
-            if (info.Block == MdStyle.None) continue;
+            int lineNo = visualLine.FirstDocumentLine.LineNumber;
+            var info = _analyzer.GetLine(lineNo);
+
+            // An expanded <details> block frames its content the same way a callout does — even on
+            // plain-prose lines that otherwise carry no block styling of their own.
+            bool inDetails = _analyzer.TryGetDetailsBlock(lineNo, out int detailsStart, out int detailsEnd, out _) &&
+                              _reveal.IsRangeRevealed(detailsStart, detailsEnd);
+
+            if (info.Block == MdStyle.None && !inDetails) continue;
 
             double top = visualLine.VisualTop - textView.ScrollOffset.Y;
             double height = visualLine.Height;
+
+            if (inDetails)
+            {
+                DrawCalloutFrame(drawingContext, Theme.Border, top, height, right,
+                    first: lineNo == detailsStart, last: lineNo == detailsEnd);
+            }
 
             // A fence or table nested one level inside a blockquote still carries the Quote flag —
             // inset its panel fill past the quote bar instead of drawing under/through it.

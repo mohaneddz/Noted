@@ -92,7 +92,6 @@ public static class MarkdownScanner
         {
             ContentStart = i,
             Tokens = tokens,
-            AllMarkers = true,
         };
     }
 
