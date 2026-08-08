@@ -721,11 +721,39 @@ public partial class MainWindow : Window
         }
     }
 
+    private ScrollViewer? _editorScrollViewer;
+
     private void OnEditorPreviewMouseWheel(object? sender, MouseWheelEventArgs e)
     {
-        if (Keyboard.Modifiers != ModifierKeys.Control) return;
-        Zoom(Math.Sign(e.Delta));
+        if (Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            Zoom(Math.Sign(e.Delta));
+            e.Handled = true;
+            return;
+        }
+
+        // The default ScrollViewer wheel handling scrolls a fixed number of lines per event no
+        // matter how small the delta is, which feels stuttery with a touchpad's frequent, fine-
+        // grained deltas. Scrolling an amount proportional to the actual delta instead — the same
+        // number of pixels a full 120-unit mouse-wheel notch would move — lets a touchpad glide.
+        var scrollViewer = _editorScrollViewer ??= FindScrollViewer(Editor);
+        if (scrollViewer is null) return;
+
+        double pixelsPerNotch = Editor.TextArea.TextView.DefaultLineHeight * SystemParameters.WheelScrollLines;
+        scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset - e.Delta / 120.0 * pixelsPerNotch);
         e.Handled = true;
+    }
+
+    private static ScrollViewer? FindScrollViewer(DependencyObject root)
+    {
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is ScrollViewer sv) return sv;
+            if (FindScrollViewer(child) is { } found) return found;
+        }
+        return null;
     }
 
     /// <summary>
