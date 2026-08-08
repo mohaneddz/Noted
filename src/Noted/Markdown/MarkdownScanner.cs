@@ -564,6 +564,12 @@ public static class MarkdownScanner
                 case '[':
                 {
                     Flush(i);
+                    if (TryParseWikiLink(s, i, end, inherit, output, out int wikiEnd))
+                    {
+                        i = wikiEnd;
+                        plain = i;
+                        continue;
+                    }
                     if (TryParseLink(s, i, end, inherit, output, depth, refs, abbreviations, out int linkEnd) ||
                         TryParseReference(s, i, end, inherit, output, depth, refs, abbreviations, out linkEnd))
                     {
@@ -572,6 +578,59 @@ public static class MarkdownScanner
                         continue;
                     }
                     break;
+                }
+
+                // "[[Wiki Link]]" / "![[Embedded Note]]" is handled by TryParseWikiLink above, tried
+                // before the ordinary link syntax so "[[" doesn't get misread as an empty "[]" label.
+
+                case '(' when i + 1 < end && s[i + 1] == '(':
+                {
+                    int close = FindDoubleClose(s, i + 2, end, ')');
+                    if (close < 0 || close == i + 2) break;
+                    Flush(i);
+                    output.Add(new MdToken(i, 2, MdStyle.Marker | inherit | MdStyle.BlockRef));
+                    Emit(output, i + 2, close - (i + 2), inherit | MdStyle.BlockRef);
+                    output.Add(new MdToken(close, 2, MdStyle.Marker | inherit | MdStyle.BlockRef));
+                    i = close + 2;
+                    plain = i;
+                    continue;
+                }
+
+                case '@' when i + 1 < end && IsWordChar(s[i + 1]) && (i == start || !IsWordChar(s[i - 1])):
+                {
+                    int j = i + 1;
+                    while (j < end && (IsWordChar(s[j]) || s[j] == '-' || s[j] == '.')) j++;
+                    Flush(i);
+                    output.Add(new MdToken(i, 1, MdStyle.Marker | inherit | MdStyle.Mention));
+                    Emit(output, i + 1, j - (i + 1), inherit | MdStyle.Mention);
+                    i = j;
+                    plain = i;
+                    continue;
+                }
+
+                case '#' when i + 1 < end && IsWordChar(s[i + 1]) && (i == start || !IsWordChar(s[i - 1])):
+                {
+                    int j = i + 1;
+                    while (j < end && (IsWordChar(s[j]) || s[j] == '-')) j++;
+                    Flush(i);
+                    output.Add(new MdToken(i, 1, MdStyle.Marker | inherit | MdStyle.Tag));
+                    Emit(output, i + 1, j - (i + 1), inherit | MdStyle.Tag);
+                    i = j;
+                    plain = i;
+                    continue;
+                }
+
+                case '%' when i + 1 < end && s[i + 1] == '%':
+                {
+                    int close = FindDoubleClose(s, i + 2, end, '%');
+                    if (close < 0) break;
+                    Flush(i);
+                    // The markers and the hidden text between them collapse as one unit — a real
+                    // comment disappears, rather than just losing its "%%" punctuation.
+                    output.Add(new MdToken(i, close + 2 - i, MdStyle.Marker | inherit | MdStyle.Comment));
+                    i = close + 2;
+                    plain = i;
+                    continue;
                 }
 
                 case '<':
@@ -596,6 +655,36 @@ public static class MarkdownScanner
         }
 
         Flush(end);
+    }
+
+    /// <summary>Parses a wiki-style link <c>[[Note Name]]</c> or embed <c>![[Note Name]]</c>. Tried before
+    /// ordinary link syntax so the doubled bracket isn't misread as an empty <c>[]</c> label.</summary>
+    private static bool TryParseWikiLink(string s, int i, int end, MdStyle inherit, List<MdToken> output, out int wikiEnd)
+    {
+        wikiEnd = i;
+        int bang = s[i] == '!' ? 1 : 0;
+        int open = i + bang;
+        if (open + 1 >= end || s[open] != '[' || s[open + 1] != '[') return false;
+
+        int close = FindDoubleClose(s, open + 2, end, ']');
+        if (close < 0 || close == open + 2) return false;
+
+        var style = bang == 1 ? MdStyle.Embed : MdStyle.WikiLink;
+        output.Add(new MdToken(i, open + 2 - i, MdStyle.Marker | style));
+        Emit(output, open + 2, close - (open + 2), inherit | style);
+        output.Add(new MdToken(close, 2, MdStyle.Marker | style));
+
+        wikiEnd = close + 2;
+        return true;
+    }
+
+    /// <summary>Index of the next doubled <paramref name="c"/> (e.g. <c>]]</c>, <c>))</c>, <c>%%</c>)
+    /// at or after <paramref name="from"/>, or -1 if none appears before <paramref name="end"/>.</summary>
+    private static int FindDoubleClose(string s, int from, int end, char c)
+    {
+        for (int k = from; k + 1 < end; k++)
+            if (s[k] == c && s[k + 1] == c) return k;
+        return -1;
     }
 
     private static bool TryParseLink(

@@ -5,7 +5,7 @@
 /// or rendered content; the remaining flags describe how it should look.
 /// </summary>
 [Flags]
-public enum MdStyle
+public enum MdStyle : long
 {
     None = 0,
     Marker = 1 << 0,
@@ -36,6 +36,12 @@ public enum MdStyle
     Abbreviation = 1 << 25,
     DefinitionTerm = 1 << 26,
     DefinitionMarker = 1 << 27,
+    Mention = 1L << 28,
+    Tag = 1L << 29,
+    WikiLink = 1L << 30,
+    Embed = 1L << 31,
+    BlockRef = 1L << 32,
+    Comment = 1L << 33,
 }
 
 /// <summary>Per-column text alignment, read from a table's <c>:---</c> / <c>:--:</c> / <c>---:</c> delimiter row.</summary>
