@@ -530,7 +530,10 @@ public static class MarkdownScanner
                         !(LooksLikeUri(s, i + 1, close) || LooksLikeEmail(s, i + 1, close))) break;
                     Flush(i);
                     output.Add(new MdToken(i, 1, MdStyle.Marker | MdStyle.Link));
-                    Emit(output, i + 1, close - i - 1, inherit | MdStyle.Link);
+                    // Both Link and Url are set on the autolink's own content (unlike "[text](url)",
+                    // where they live on separate tokens) so a click handler can tell the two apart
+                    // and use the content itself as the destination.
+                    Emit(output, i + 1, close - i - 1, inherit | MdStyle.Link | MdStyle.Url);
                     output.Add(new MdToken(close, 1, MdStyle.Marker | MdStyle.Link));
                     i = close + 1;
                     plain = i;

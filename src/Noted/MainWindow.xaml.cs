@@ -814,9 +814,18 @@ public partial class MainWindow : Window
             bool isLink = (token.Style & MdStyle.Link) != 0;
             bool isUrl = (token.Style & MdStyle.Url) != 0;
 
+            // An autolink ("<https://...>" / "<user@host>") carries both flags on its own content
+            // token, rather than splitting label and destination the way "[text](url)" does — the
+            // token's text is itself the destination.
+            if (!token.IsMarker && isLink && isUrl && rel >= token.Offset && rel < token.End)
+            {
+                string raw = document.GetText(docLine.Offset + token.Offset, token.Length);
+                return raw.Contains('@') && !raw.Contains("://") ? "mailto:" + raw : raw;
+            }
+
             if (token.IsMarker && isLink && !isUrl) openStart = token.Offset;
 
-            if (isUrl && openStart >= 0 && rel >= openStart && rel < token.End)
+            if (token.IsMarker && isUrl && openStart >= 0 && rel >= openStart && rel < token.End)
             {
                 string raw = document.GetText(docLine.Offset + token.Offset, token.Length);
                 return ExtractUrl(raw);
