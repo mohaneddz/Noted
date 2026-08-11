@@ -3,6 +3,23 @@ obj/
 .vs/
 *.user
 
+# Local editor / agent state
+.claude/
+.codex/
+.cursor/
+.idea/
+.vscode/
+CLAUDE.md
+AGENTS.md
+
+# Local scratch and reference files
+template
+old_readme_other_project
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
 # Installer build output — regenerate with build/build-installer.ps1
 build/publish/
 build/*.msi

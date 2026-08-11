@@ -46,7 +46,7 @@ public static class ShortcutSheet
 
         - `Ctrl+Alt+1` … `Ctrl+Alt+6` — heading level
         - `Ctrl+Alt+0` — back to paragraph
-        - `Ctrl+Shift+L` — bullet list
+        - `Ctrl+Alt+L` — bullet list
         - `Ctrl+Shift+O` — numbered list
         - `Ctrl+Shift+C` — task checkbox
         - `Ctrl+Shift+Q` — blockquote
@@ -63,12 +63,13 @@ public static class ShortcutSheet
 
         ## View
 
-        - `Ctrl+Shift+D` — switch between dark and light
+        - `Ctrl+Shift+L` — switch between dark and light
         - `Ctrl+Shift+P` — toggle live markdown (show all syntax)
         - `F11` — full screen
         - `Ctrl+=` / `Ctrl+-` — bigger / smaller text
         - `Ctrl+0` — reset text size
-        - `Ctrl+,` — open the settings folder
+        - `Ctrl+,` — open settings
+        - `Ctrl+Shift+,` — open the settings folder
         - `F1` — this sheet
 
         ---

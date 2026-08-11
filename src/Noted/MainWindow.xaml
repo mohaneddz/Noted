@@ -35,7 +35,9 @@
             </Grid.RowDefinitions>
 
             <!-- ============ title bar / tab strip ============ -->
-            <Grid Grid.Row="0" x:Name="TitleBar" Background="{DynamicResource Brush.Surface}">
+            <Grid Grid.Row="0" x:Name="TitleBar" Background="{DynamicResource Brush.Surface}"
+                  shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                  MouseLeftButtonDown="OnTitleBarMouseLeftButtonDown">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -89,7 +91,7 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
                             Margin="8,0" shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <Button x:Name="ThemeButton" Style="{StaticResource IconButton}" Content="&#xE706;"
-                            Click="OnToggleThemeClick" ToolTip="Toggle theme (Ctrl+Shift+D)" />
+                            Click="OnToggleThemeClick" ToolTip="Toggle theme (Ctrl+Shift+L)" />
                     <Button x:Name="MenuButton" Style="{StaticResource IconButton}" Content="&#xE712;"
                             Click="OnMenuClick" ToolTip="Menu — shortcuts with F1" />
                 </StackPanel>

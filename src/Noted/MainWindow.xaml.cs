@@ -90,6 +90,7 @@ public partial class MainWindow : Window
         RestoreWindowPlacement();
         ApplySettingsToEditor();
         BuildInputBindings();
+        PreviewKeyDown += OnWindowPreviewKeyDown;
 
         OpenInitialDocuments(arguments);
 
@@ -204,7 +205,7 @@ public partial class MainWindow : Window
 
         // ---- block formatting ----
         Bind(Key.Q, ctrlShift, () => MarkdownEditing.ToggleLinePrefix(Editor, "> "));
-        Bind(Key.L, ctrlShift, () => MarkdownEditing.ToggleLinePrefix(Editor, "- "));
+        Bind(Key.L, ctrlAlt, () => MarkdownEditing.ToggleLinePrefix(Editor, "- "));
         Bind(Key.O, ctrlShift, () => MarkdownEditing.ToggleLinePrefix(Editor, "1. "));
         Bind(Key.C, ctrlShift, () => MarkdownEditing.ToggleTask(Editor));
         Bind(Key.M, ctrlShift, () => MarkdownEditing.InsertCodeFence(Editor));
@@ -1234,6 +1235,52 @@ public partial class MainWindow : Window
 
     private void OnToggleThemeClick(object sender, RoutedEventArgs e) => ToggleTheme();
 
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.L || Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift)) return;
+
+        ToggleTheme();
+        e.Handled = true;
+    }
+
+    private void OnTitleBarMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left || IsInteractiveTitleBarElement(e.OriginalSource as DependencyObject))
+            return;
+
+        e.Handled = true;
+        if (e.ClickCount == 2)
+        {
+            OnMaximizeClick(sender, e);
+            return;
+        }
+
+        // Hand the gesture back to Windows as a real caption drag. This preserves native snapping
+        // and correctly restores a maximized window when it is pulled away from the monitor edge.
+        ReleaseCapture();
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        SendMessage(handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+    }
+
+    private static bool IsInteractiveTitleBarElement(DependencyObject? element)
+    {
+        while (element is not null)
+        {
+            if (element is System.Windows.Controls.Primitives.ButtonBase
+                or ListBoxItem
+                or System.Windows.Controls.Primitives.ScrollBar
+                or System.Windows.Controls.Primitives.Thumb)
+                return true;
+
+            if (ReferenceEquals(element, Application.Current.MainWindow)) break;
+            element = element is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(element)
+                : LogicalTreeHelper.GetParent(element);
+        }
+
+        return false;
+    }
+
     private void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     private void OnMaximizeClick(object sender, RoutedEventArgs e) =>
@@ -1261,6 +1308,14 @@ public partial class MainWindow : Window
     // ---- Win32: the true monitor bounds, taskbar included ----
 
     private const uint MONITOR_DEFAULTTONEAREST = 2;
+    private const uint WM_NCLBUTTONDOWN = 0x00A1;
+    private const int HTCAPTION = 2;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct RECT { public int Left, Top, Right, Bottom; }
