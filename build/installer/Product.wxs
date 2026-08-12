@@ -56,6 +56,14 @@
           <File Source="..\publish\ICSharpCode.AvalonEdit.dll" KeyPath="yes" />
         </Component>
 
+        <Component Id="WpfMathDll" Guid="5A4BC87F-8DC0-4C37-81C7-A0AB2B438A7A">
+          <File Source="..\publish\WpfMath.dll" KeyPath="yes" />
+        </Component>
+
+        <Component Id="XamlMathSharedDll" Guid="29973DDF-E7FC-4386-ABF3-F71EB47583F4">
+          <File Source="..\publish\XamlMath.Shared.dll" KeyPath="yes" />
+        </Component>
+
         <Component Id="FileAssociations" Guid="9C3E7A41-2F5C-4E8B-8A1D-6B4C0F9D3A77">
           <RegistryValue Root="HKCR" Key="Applications\Noted.exe\SupportedTypes" Name=".md" Value="" Type="string" KeyPath="yes" />
           <RegistryValue Root="HKCR" Key="Applications\Noted.exe\SupportedTypes" Name=".markdown" Value="" Type="string" />
@@ -83,6 +91,8 @@
       <ComponentRef Id="DepsJson" />
       <ComponentRef Id="RuntimeConfigJson" />
       <ComponentRef Id="AvalonEditDll" />
+      <ComponentRef Id="WpfMathDll" />
+      <ComponentRef Id="XamlMathSharedDll" />
       <ComponentRef Id="FileAssociations" />
     </Feature>
 

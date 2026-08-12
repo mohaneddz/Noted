@@ -22,5 +22,6 @@ Thumbs.db
 
 # Installer build output — regenerate with build/build-installer.ps1
 build/publish/
+build/release/
 build/*.msi
 build/*.wixpdb
