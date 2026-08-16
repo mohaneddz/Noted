@@ -150,6 +150,7 @@ public partial class MainWindow : Window
         Editor.PreviewMouseWheel += OnEditorPreviewMouseWheel;
         textView.MouseMove += OnTextViewMouseMove;
         textView.PreviewMouseLeftButtonDown += OnTextViewMouseLeftButtonDown;
+        textView.PreviewMouseDown += OnTextViewMouseDown;
 
         _searchPanel = SearchPanel.Install(Editor);
         _searchPanel.MarkerBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xF5, 0xC2, 0x42));
@@ -821,6 +822,16 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Middle-click opens a link under the cursor, same as Ctrl+click.</summary>
+    private void OnTextViewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle) return;
+        if (LinkUrlAt(e.GetPosition(Editor)) is not { } url) return;
+
+        OpenLink(url);
+        e.Handled = true;
+    }
+
     /// <summary>The target URL of a markdown link under a point in editor coordinates, or null.</summary>
     private string? LinkUrlAt(Point editorPoint)
     {
@@ -843,13 +854,16 @@ public partial class MainWindow : Window
             bool isLink = (token.Style & MdStyle.Link) != 0;
             bool isUrl = (token.Style & MdStyle.Url) != 0;
 
-            // An autolink ("<https://...>" / "<user@host>") carries both flags on its own content
-            // token, rather than splitting label and destination the way "[text](url)" does — the
-            // token's text is itself the destination.
+            // An autolink ("<https://...>" / "<user@host>") or a bare "https://…" / "www…" typed
+            // straight into prose carries both flags on its own content token, rather than splitting
+            // label and destination the way "[text](url)" does — the token's text is itself the
+            // destination.
             if (!token.IsMarker && isLink && isUrl && rel >= token.Offset && rel < token.End)
             {
                 string raw = document.GetText(docLine.Offset + token.Offset, token.Length);
-                return raw.Contains('@') && !raw.Contains("://") ? "mailto:" + raw : raw;
+                if (raw.Contains("://")) return raw;
+                if (raw.Contains('@')) return "mailto:" + raw;
+                return "https://" + raw;
             }
 
             if (token.IsMarker && isLink && !isUrl) openStart = token.Offset;
@@ -890,7 +904,16 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception)
         {
+            return;
         }
+
+        // The browser launch above steals focus; hand it straight back so the link opens
+        // "behind" Noted instead of yanking the user out of what they were writing.
+        Dispatcher.BeginInvoke(() =>
+        {
+            Activate();
+            Editor.Focus();
+        }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
     /// <summary>Copies the code inside a fenced block (the lines between its delimiters) to the clipboard.</summary>
