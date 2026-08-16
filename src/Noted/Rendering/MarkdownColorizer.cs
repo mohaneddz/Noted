@@ -165,7 +165,10 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
         else if ((style & MdStyle.Link) != 0)
         {
             el.TextRunProperties.SetForegroundBrush(Theme.Link);
-            el.TextRunProperties.SetTextDecorations(TextDecorations.Underline);
+            var linkPen = new Pen(new SolidColorBrush(((SolidColorBrush)Theme.Link).Color) { Opacity = 0.45 }, 1);
+            var linkDecoration = new TextDecoration(TextDecorationLocation.Underline, linkPen, 1,
+                TextDecorationUnit.Pixel, TextDecorationUnit.Pixel);
+            el.TextRunProperties.SetTextDecorations(new TextDecorationCollection { linkDecoration });
         }
 
         if ((style & MdStyle.Mention) != 0)
