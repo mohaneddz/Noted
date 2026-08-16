@@ -10,6 +10,12 @@ public static partial class MarkdownEditing
     [GeneratedRegex(@"^(?<indent>[ \t]*)(?<quote>(?:>[ ]?)*)(?:(?<bullet>[-*+])[ \t]+|(?<number>\d{1,9})(?<delim>[.)])[ \t]+)?(?<task>\[[ xX-]\][ \t]+)?")]
     private static partial Regex ListPrefixRegex { get; }
 
+    [GeneratedRegex(@"^[-*+][ \t]+")]
+    private static partial Regex BulletPrefixRegex { get; }
+
+    [GeneratedRegex(@"^\d{1,9}[.)][ \t]+")]
+    private static partial Regex OrderedPrefixRegex { get; }
+
     /// <summary>
     /// Continues lists and blockquotes on Enter, and clears the prefix when the user
     /// presses Enter on an item they never filled in.
@@ -72,16 +78,26 @@ public static partial class MarkdownEditing
 
         string inner = document.GetText(start, length);
         int markerLength = marker.Length;
+        char markerChar = marker[0];
 
+        // "*" (italic) is a prefix of "**" (bold), so a naive StartsWith/EndsWith check treats the
+        // inner word of "**bold**" as if it were wrapped in a single "*" and strips one asterisk off
+        // each side — turning bold into italic instead of adding italic on top of it. Requiring the
+        // run of marker characters to be exactly markerLength long (no more) keeps the two apart.
         bool wrappedInside = inner.Length >= markerLength * 2 &&
                              inner.StartsWith(marker, StringComparison.Ordinal) &&
-                             inner.EndsWith(marker, StringComparison.Ordinal);
+                             inner.EndsWith(marker, StringComparison.Ordinal) &&
+                             (inner.Length == markerLength || inner[markerLength] != markerChar) &&
+                             (inner.Length == markerLength * 2 || inner[^(markerLength + 1)] != markerChar);
 
         bool wrappedOutside = !wrappedInside &&
                               start >= markerLength &&
                               start + length + markerLength <= document.TextLength &&
                               document.GetText(start - markerLength, markerLength) == marker &&
-                              document.GetText(start + length, markerLength) == marker;
+                              document.GetText(start + length, markerLength) == marker &&
+                              (start == markerLength || document.GetCharAt(start - markerLength - 1) != markerChar) &&
+                              (start + length + markerLength == document.TextLength ||
+                               document.GetCharAt(start + length + markerLength) != markerChar);
 
         using (document.RunUpdate())
         {
@@ -121,6 +137,13 @@ public static partial class MarkdownEditing
             if (firstLine > lastLine) (firstLine, lastLine) = (lastLine, firstLine);
         }
 
+        // A bulleted or numbered line's actual marker rarely matches the toggle's own literal
+        // prefix — "1. " becomes "2. " after Enter continues the list, and a bullet may be "*" or
+        // "+" rather than "-". Matching by shape (not exact text) is what lets the shortcut turn
+        // the marker back off instead of stacking a second one in front of it.
+        bool isBulletPrefix = BulletPrefixRegex.IsMatch(prefix);
+        bool isOrderedPrefix = OrderedPrefixRegex.IsMatch(prefix);
+
         using (document.RunUpdate())
         {
             for (int number = firstLine; number <= lastLine; number++)
@@ -131,8 +154,12 @@ public static partial class MarkdownEditing
                 while (indent < text.Length && (text[indent] == ' ' || text[indent] == '\t')) indent++;
 
                 string rest = text[indent..];
-                if (rest.StartsWith(prefix, StringComparison.Ordinal))
-                    document.Remove(line.Offset + indent, prefix.Length);
+                int existingLength = isBulletPrefix ? BulletPrefixRegex.Match(rest).Length
+                    : isOrderedPrefix ? OrderedPrefixRegex.Match(rest).Length
+                    : rest.StartsWith(prefix, StringComparison.Ordinal) ? prefix.Length : 0;
+
+                if (existingLength > 0)
+                    document.Remove(line.Offset + indent, existingLength);
                 else
                     document.Insert(line.Offset + indent, prefix);
             }
