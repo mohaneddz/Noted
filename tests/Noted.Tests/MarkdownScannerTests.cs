@@ -142,6 +142,39 @@ public class MarkdownScannerTests
     public void BracketsThatAreNotLinksStayPut()
         => Assert.Equal("[just brackets]", Rendered("[just brackets]"));
 
+    [Theory]
+    [InlineData("see https://example.com now", "https://example.com")]
+    [InlineData("see http://example.com now", "http://example.com")]
+    [InlineData("see www.example.com now", "www.example.com")]
+    public void BareUrlInProseIsRecognisedAsALink(string line, string url)
+    {
+        var token = ContentAt(line, url);
+        Assert.True((token.Style & MdStyle.Link) != 0);
+        Assert.True((token.Style & MdStyle.Url) != 0);
+    }
+
+    [Fact]
+    public void BareUrlTrailingPunctuationIsNotPartOfTheLink()
+    {
+        // ContentAt requires an exact-length token match, so this fails outright if the scanner
+        // swallowed the trailing period into the URL.
+        var token = ContentAt("visit https://example.com.", "https://example.com");
+        Assert.True((token.Style & MdStyle.Url) != 0);
+    }
+
+    [Fact]
+    public void BareUrlInParenthesesKeepsBalancedTrailingParen()
+    {
+        var token = ContentAt(
+            "(https://en.wikipedia.org/wiki/C_(disambiguation))",
+            "https://en.wikipedia.org/wiki/C_(disambiguation)");
+        Assert.True((token.Style & MdStyle.Url) != 0);
+    }
+
+    [Fact]
+    public void UrlSchemeMidWordIsNotMistakenForABareLink()
+        => Assert.DoesNotContain(Scan("xhttps://example.com").Tokens, t => (t.Style & MdStyle.Url) != 0);
+
     // ---------------- lists and tasks ----------------
 
     [Theory]

@@ -649,6 +649,17 @@ public static class MarkdownScanner
                     plain = i;
                     continue;
                 }
+
+                // A bare "https://…" / "http://…" / "www…" typed straight into prose, with no
+                // "<...>" or "[text](...)" wrapping. Styled and clickable just like an autolink.
+                case 'h' or 'w' when MatchBareUrl(s, i, end) is int bareEnd && bareEnd > i:
+                {
+                    Flush(i);
+                    Emit(output, i, bareEnd - i, inherit | MdStyle.Link | MdStyle.Url);
+                    i = bareEnd;
+                    plain = i;
+                    continue;
+                }
             }
 
             i++;
@@ -1044,6 +1055,60 @@ public static class MarkdownScanner
         int j = i + 3;
         while (j < line.Length && (line[j] == ' ' || line[j] == '\t')) j++;
         return j;
+    }
+
+    /// <summary>Matches a bare "https://…", "http://…" or "www…" run starting at <paramref name="i"/>
+    /// (no "&lt;...&gt;" or "[text](...)" wrapping needed), returning its end offset, or <paramref name="i"/>
+    /// if nothing URL-like starts there.</summary>
+    private static int MatchBareUrl(string s, int i, int end)
+    {
+        if (i > 0 && (IsWordChar(s[i - 1]) || s[i - 1] is '/' or '@')) return i;
+
+        bool isWww = s[i] == 'w';
+        int hostStart;
+        if (isWww)
+        {
+            if (end - i < 5 || s[i + 1] != 'w' || s[i + 2] != 'w' || s[i + 3] != '.') return i;
+            hostStart = i + 4;
+        }
+        else if (end - i >= 8 && string.CompareOrdinal(s, i, "https://", 0, 8) == 0)
+        {
+            hostStart = i + 8;
+        }
+        else if (end - i >= 7 && string.CompareOrdinal(s, i, "http://", 0, 7) == 0)
+        {
+            hostStart = i + 7;
+        }
+        else
+        {
+            return i;
+        }
+
+        if (hostStart >= end || char.IsWhiteSpace(s[hostStart]) || !IsWordChar(s[hostStart])) return i;
+
+        int j = hostStart;
+        while (j < end && !char.IsWhiteSpace(s[j]) && s[j] is not ('<' or '>' or '"' or '\'' or '`'))
+            j++;
+
+        // Trim trailing punctuation that reads as prose (or a markdown wrapper like "**") rather than
+        // part of the address — but keep a closing ")" that balances one earlier in the URL (e.g. a
+        // Wikipedia "(disambiguation)" link).
+        while (j > hostStart && s[j - 1] is '.' or ',' or ';' or ':' or '!' or '?' or ')' or ']' or '*' or '_')
+        {
+            if (s[j - 1] == ')')
+            {
+                int opens = 0, closes = 0;
+                for (int k = i; k < j; k++)
+                {
+                    if (s[k] == '(') opens++;
+                    else if (s[k] == ')') closes++;
+                }
+                if (closes <= opens) break;
+            }
+            j--;
+        }
+
+        return s.IndexOf('.', hostStart, j - hostStart) < 0 ? i : j;
     }
 
     private static bool LooksLikeUri(string s, int start, int end)
