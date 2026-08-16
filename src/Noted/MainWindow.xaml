@@ -36,7 +36,6 @@
 
             <!-- ============ title bar / tab strip ============ -->
             <Grid Grid.Row="0" x:Name="TitleBar" Background="{DynamicResource Brush.Surface}"
-                  shell:WindowChrome.IsHitTestVisibleInChrome="True"
                   MouseLeftButtonDown="OnTitleBarMouseLeftButtonDown">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
