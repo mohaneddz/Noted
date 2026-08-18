@@ -231,7 +231,6 @@
 
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Width" Value="10" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollBar">
@@ -242,7 +241,7 @@
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
                                             <Border Background="{DynamicResource Brush.Faint}"
-                                                    CornerRadius="3" Margin="3,2" Opacity="0.7" />
+                                                    CornerRadius="2" Margin="1" Opacity="0.7" />
                                         </ControlTemplate>
                                     </Thumb.Template>
                                 </Thumb>
@@ -257,13 +256,18 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="Orientation" Value="Horizontal">
-                            <Setter Property="Height" Value="10" />
+                            <Setter Property="Height" Value="5" />
                             <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width" Value="10" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!-- ===================== text ===================== -->

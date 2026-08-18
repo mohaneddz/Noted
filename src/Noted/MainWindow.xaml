@@ -52,14 +52,22 @@
                                Foreground="{DynamicResource Brush.Faint}" />
                 </StackPanel>
 
-                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Disabled"
-                              HorizontalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="TabStripScroll" Grid.Column="1" VerticalScrollBarVisibility="Disabled"
+                              HorizontalScrollBarVisibility="Auto"
+                              PreviewMouseWheel="OnTabStripPreviewMouseWheel"
+                              shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <StackPanel Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
                         <ListBox x:Name="TabList"
                                  Background="Transparent" BorderThickness="0"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  ItemContainerStyle="{StaticResource TabItemStyle}"
-                                 SelectionChanged="OnTabSelectionChanged">
+                                 SelectionChanged="OnTabSelectionChanged"
+                                 SelectionMode="Single"
+                                 ScrollViewer.CanContentScroll="False">
+                            <ListBox.Template>
+                                <ControlTemplate TargetType="ListBox">
+                                    <ItemsPresenter />
+                                </ControlTemplate>
+                            </ListBox.Template>
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <StackPanel Orientation="Horizontal" />

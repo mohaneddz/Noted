@@ -1321,6 +1321,15 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void OnTabStripPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (TabStripScroll.ScrollableWidth <= 0)
+            return;
+
+        TabStripScroll.ScrollToHorizontalOffset(TabStripScroll.HorizontalOffset - e.Delta);
+        e.Handled = true;
+    }
+
     private void OnTitleBarMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton != MouseButton.Left || IsInteractiveTitleBarElement(e.OriginalSource as DependencyObject))

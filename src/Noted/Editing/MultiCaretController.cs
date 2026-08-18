@@ -116,6 +116,8 @@ public sealed class MultiCaretController : IBackgroundRenderer
     /// <summary>
     /// Applies the same point edit at the primary caret and every secondary caret. Carets are edited
     /// from the highest document offset down, so an edit never shifts an offset still waiting its turn.
+    /// Each edit's length delta is then applied back onto the carets already processed, since those
+    /// sit after the edit point and would otherwise drift by one character per keystroke.
     /// </summary>
     private void ApplyAtAllCarets(Func<TextDocument, int, int> edit)
     {
@@ -125,6 +127,7 @@ public sealed class MultiCaretController : IBackgroundRenderer
         var newOffsets = new int[all.Count];
 
         var order = Enumerable.Range(0, all.Count).OrderByDescending(i => all[i]);
+        var processed = new List<int>();
 
         _applying = true;
         try
@@ -133,7 +136,16 @@ public sealed class MultiCaretController : IBackgroundRenderer
             {
                 foreach (int i in order)
                 {
+                    int lengthBefore = document.TextLength;
                     newOffsets[i] = edit(document, all[i]);
+                    int delta = document.TextLength - lengthBefore;
+
+                    if (delta != 0)
+                    {
+                        foreach (int done in processed) newOffsets[done] += delta;
+                    }
+
+                    processed.Add(i);
                 }
             }
         }
