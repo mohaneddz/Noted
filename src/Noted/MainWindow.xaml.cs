@@ -40,6 +40,7 @@ public partial class MainWindow : Window
     private readonly ImageElementGenerator _images = new();
     private BlockCollapser _collapser = null!;
     private readonly BlockDecorationRenderer _decorations;
+    private readonly MultiCaretController _multiCaret;
     private readonly DispatcherTimer _statusTimer;
     private readonly DispatcherTimer _autoSaveTimer;
     private readonly AppSettings _settings;
@@ -71,6 +72,7 @@ public partial class MainWindow : Window
         _details = new DetailsElementGenerator(_analyzer, _reveal);
         _tables = new TableElementGenerator(_analyzer, _reveal);
         _decorations = new BlockDecorationRenderer(_analyzer, _reveal);
+        _multiCaret = new MultiCaretController(Editor);
 
         _statusTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -119,6 +121,7 @@ public partial class MainWindow : Window
         textView.ElementGenerators.Add(_emoji);
         textView.ElementGenerators.Add(_inlineMath);
         textView.BackgroundRenderers.Add(_decorations);
+        textView.BackgroundRenderers.Add(_multiCaret);
 
         _collapser = new BlockCollapser(textView, [_blockMath, _details, _tables]);
 
@@ -151,6 +154,7 @@ public partial class MainWindow : Window
         textView.MouseMove += OnTextViewMouseMove;
         textView.PreviewMouseLeftButtonDown += OnTextViewMouseLeftButtonDown;
         textView.PreviewMouseDown += OnTextViewMouseDown;
+        Editor.TextArea.PreviewTextInput += OnEditorPreviewTextInput;
 
         _searchPanel = SearchPanel.Install(Editor);
         _searchPanel.MarkerBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xF5, 0xC2, 0x42));
@@ -715,9 +719,45 @@ public partial class MainWindow : Window
 
     private void OnEditorPreviewKeyDown(object? sender, KeyEventArgs e)
     {
+        if (_multiCaret.HasSecondaryCarets)
+        {
+            if (e.Key == Key.Escape)
+            {
+                _multiCaret.Clear();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.KeyboardDevice.Modifiers == ModifierKeys.None)
+            {
+                switch (e.Key)
+                {
+                    case Key.Back when _multiCaret.HandleBackspace():
+                    case Key.Delete when _multiCaret.HandleDelete():
+                    case Key.Enter when _multiCaret.HandleEnter():
+                    case Key.Return when _multiCaret.HandleEnter():
+                        e.Handled = true;
+                        return;
+                    // Navigation only ever moves the primary caret, so it would silently strand the
+                    // secondary ones — clearer to drop back to a single caret than let that happen.
+                    case Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End:
+                        _multiCaret.Clear();
+                        break;
+                }
+            }
+        }
+
         if (e.Key is Key.Enter or Key.Return &&
             e.KeyboardDevice.Modifiers == ModifierKeys.None &&
             MarkdownEditing.TryContinueList(Editor))
+        {
+            e.Handled = true;
+        }
+    }
+
+    private void OnEditorPreviewTextInput(object? sender, TextCompositionEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(e.Text) && _multiCaret.HandleTextInput(e.Text))
         {
             e.Handled = true;
         }
@@ -813,6 +853,20 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
+
+        // Alt+click drops a second caret at the click point (and lifts one back off if it lands on
+        // an existing one), the same gesture other editors use for multi-cursor editing.
+        if (Keyboard.Modifiers == ModifierKeys.Alt)
+        {
+            if (Editor.GetPositionFromPoint(e.GetPosition(Editor)) is { } altPos)
+            {
+                _multiCaret.ToggleCaretAt(Editor.Document.GetOffset(altPos.Location));
+            }
+            e.Handled = true;
+            return;
+        }
+
+        if (_multiCaret.HasSecondaryCarets) _multiCaret.Clear();
 
         // Ctrl+click opens a link; a plain click keeps placing the caret so link text stays editable.
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && LinkUrlAt(e.GetPosition(Editor)) is { } url)
@@ -1051,6 +1105,7 @@ public partial class MainWindow : Window
         _reveal.Enabled = _settings.LiveMarkdown;
         _decorations.Theme = theme;
         _decorations.MonospaceFont = new FontFamily(_settings.MonospaceFontFamily);
+        _multiCaret.CaretBrush = theme.Text;
         _decorations.HideMarkers = _settings.LiveMarkdown;
 
         AppMark.Source = new BitmapImage(new Uri(
