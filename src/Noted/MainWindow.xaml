@@ -53,7 +53,7 @@
                 </StackPanel>
 
                 <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Disabled"
-                              HorizontalScrollBarVisibility="Hidden">
+                              HorizontalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
                         <ListBox x:Name="TabList"
                                  Background="Transparent" BorderThickness="0"
