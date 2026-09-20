@@ -116,7 +116,7 @@ The package is framework-dependent, so the target machine needs the .NET 10 Wind
 dotnet test
 ```
 
-The tests cover the Markdown scanner and cross-line analyzer—the pieces most likely to create subtle rendering errors.
+The tests cover Markdown scanning, cross-line analysis, and syntax reveal tracking—the pieces most likely to create subtle rendering errors.
 
 ## How live preview works
 
