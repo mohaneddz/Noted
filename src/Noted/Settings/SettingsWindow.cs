@@ -167,6 +167,29 @@ public sealed class SettingsWindow : Window
     {
         var panel = new StackPanel();
 
+        panel.Children.Add(Header("Links"));
+        var modes = new ComboBox
+        {
+            Style = (Style)FindResource("SettingsComboBox"),
+            ItemsSource = new[] { "Nothing — text only", "Icon — favicon or file type", "Mini preview — thumbnail on the left", "Preview — large card and playback" },
+            SelectedIndex = Enum.IsDefined(_settings.LinkDisplayMode) ? (int)_settings.LinkDisplayMode : 0,
+            Margin = new Thickness(0, 4, 0, 10),
+        };
+        modes.SelectionChanged += (_, _) =>
+        {
+            if (modes.SelectedIndex < 0) return;
+            _settings.LinkDisplayMode = (LinkDisplayMode)modes.SelectedIndex;
+            _onChange();
+        };
+        panel.Children.Add(modes);
+        var hint = new TextBlock
+        {
+            Text = "Applies to web addresses and Markdown links in live Markdown. Icons and thumbnails load from linked sites. Full previews load when clicked and need WebView2. Right-click a card to edit its link. Image embeds keep their image rendering.",
+            TextWrapping = TextWrapping.Wrap, FontSize = 12, Margin = new Thickness(0, 0, 0, 20),
+        };
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Muted");
+        panel.Children.Add(hint);
+
         panel.Children.Add(Header("Saving"));
         panel.Children.Add(ToggleRow("Autosave", "Saves the active note automatically about 1.5 seconds after you stop typing. "
             + "Notes you haven't saved anywhere yet are cached privately and reopen next time you launch Noted — "

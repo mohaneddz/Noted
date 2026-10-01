@@ -19,4 +19,19 @@ public class RevealTrackerTests
         var tracker = new RevealTracker { Enabled = false };
         Assert.True(tracker.IsRangeRevealed(10, 20));
     }
+
+    [Fact]
+    public void SecondarySelectionsRevealTheirLinesAndDirtyTheOldRangeWhenCleared()
+    {
+        var tracker = new RevealTracker();
+        (int Start, int End) dirty = default;
+        tracker.RevealChanged += (start, end) => dirty = (start, end);
+        tracker.SetAdditionalRanges([(5, 7), (12, 12)]);
+        Assert.True(tracker.IsRevealed(6));
+        Assert.True(tracker.IsRangeRevealed(10, 15));
+        Assert.False(tracker.IsRevealed(9));
+        tracker.SetAdditionalRanges([]);
+        Assert.False(tracker.IsRevealed(6));
+        Assert.Equal((5, 12), dirty);
+    }
 }

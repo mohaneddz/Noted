@@ -137,6 +137,7 @@ public sealed class MarkdownColorizer : DocumentColorizingTransformer
 
     private void ApplyContentStyle(VisualLineElement el, MdStyle style)
     {
+        if (el is LinkObjectElement) return;
         if ((style & MdStyle.Code) != 0)
         {
             el.TextRunProperties.SetTypeface(new Typeface(

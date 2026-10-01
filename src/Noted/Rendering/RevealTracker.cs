@@ -14,6 +14,16 @@ public sealed class RevealTracker
     private int _caretLine = 1;
     private int _selectionStartLine;
     private int _selectionEndLine = -1;
+    private (int Start, int End)[] _additionalRanges = [];
+
+    public void SetAdditionalRanges(IEnumerable<(int Start, int End)> ranges)
+    {
+        var next = ranges.OrderBy(r => r.Start).ThenBy(r => r.End).Distinct().ToArray();
+        if (_additionalRanges.SequenceEqual(next)) return;
+        var dirty = _additionalRanges.Concat(next).ToArray();
+        _additionalRanges = next;
+        if (dirty.Length > 0) RevealChanged?.Invoke(dirty.Min(r => r.Start), dirty.Max(r => r.End));
+    }
 
     public event Action<int, int>? RevealChanged;
 
@@ -39,6 +49,7 @@ public sealed class RevealTracker
     {
         if (!Enabled) return true;
         if (lineNumber == _caretLine) return true;
+        if (_additionalRanges.Any(r => lineNumber >= r.Start && lineNumber <= r.End)) return true;
         return lineNumber >= _selectionStartLine && lineNumber <= _selectionEndLine;
     }
 
@@ -51,6 +62,7 @@ public sealed class RevealTracker
     {
         if (!Enabled) return true;
         if (_caretLine >= startLine && _caretLine <= endLine) return true;
+        if (_additionalRanges.Any(r => r.Start <= endLine && r.End >= startLine)) return true;
         if (_selectionEndLine < _selectionStartLine || _selectionEndLine < 0) return false;
         return _selectionStartLine <= endLine && _selectionEndLine >= startLine;
     }

@@ -38,6 +38,7 @@ public partial class MainWindow : Window
     private readonly DetailsElementGenerator _details;
     private readonly TableElementGenerator _tables;
     private readonly ImageElementGenerator _images = new();
+    private readonly LinkElementGenerator _links;
     private BlockCollapser _collapser = null!;
     private readonly BlockDecorationRenderer _decorations;
     private readonly MultiCaretController _multiCaret;
@@ -71,8 +72,20 @@ public partial class MainWindow : Window
         _blockMath = new BlockMathElementGenerator(_analyzer, _reveal);
         _details = new DetailsElementGenerator(_analyzer, _reveal);
         _tables = new TableElementGenerator(_analyzer, _reveal);
+        _links = new LinkElementGenerator(_analyzer, _reveal)
+        {
+            NotePath = () => _active?.FilePath,
+            EditAt = RevealAtOffset,
+        };
         _decorations = new BlockDecorationRenderer(_analyzer, _reveal);
         _multiCaret = new MultiCaretController(Editor);
+        _multiCaret.RangesChanged += () =>
+        {
+            var document = Editor.Document;
+            _reveal.SetAdditionalRanges(document is null ? [] : _multiCaret.SecondaryRanges
+                .Where(r => r.Offset >= 0 && r.End <= document.TextLength)
+                .Select(r => (document.GetLineByOffset(r.Offset).LineNumber, document.GetLineByOffset(r.End).LineNumber)));
+        };
 
         _statusTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -117,6 +130,7 @@ public partial class MainWindow : Window
         textView.ElementGenerators.Add(_details);
         // Tables collapse whole ranges into an aligned grid; claim the span before line-local generators.
         textView.ElementGenerators.Add(_tables);
+        textView.ElementGenerators.Add(_links);
         textView.ElementGenerators.Add(_generator);
         textView.ElementGenerators.Add(_emoji);
         textView.ElementGenerators.Add(_inlineMath);
@@ -230,7 +244,8 @@ public partial class MainWindow : Window
         Bind(Key.Down, ModifierKeys.Alt, () => MarkdownEditing.MoveLine(Editor, 1));
 
         // ---- view ----
-        Bind(Key.D, ctrlShift, ToggleTheme);
+        Bind(Key.D, ctrlShift, _multiCaret.SelectNextOccurrence);
+        Bind(Key.L, ctrlShift, ToggleTheme);
         Bind(Key.F11, ModifierKeys.None, ToggleFullScreen);
         Bind(Key.OemPlus, ctrl, () => Zoom(1));
         Bind(Key.Add, ctrl, () => Zoom(1));
@@ -1102,6 +1117,9 @@ public partial class MainWindow : Window
         _tables.Theme = theme;
         _tables.MonospaceFont = new FontFamily(_settings.MonospaceFontFamily);
         _images.HideMarkers = _settings.LiveMarkdown;
+        _links.Enabled = _settings.LiveMarkdown;
+        _links.Mode = _settings.LinkDisplayMode;
+        _links.Theme = theme;
         _reveal.Enabled = _settings.LiveMarkdown;
         _decorations.Theme = theme;
         _decorations.MonospaceFont = new FontFamily(_settings.MonospaceFontFamily);
@@ -1170,6 +1188,7 @@ public partial class MainWindow : Window
         _blockMath.ContentWidth = Math.Max(120, available - side - rightSide);
         _tables.ContentWidth = Math.Max(120, available - side - rightSide);
         _images.MaxWidth = Math.Max(120, available - side - rightSide);
+        _links.MaxWidth = _images.MaxWidth;
         Editor.TextArea.TextView.InvalidateLayer(ICSharpCode.AvalonEdit.Rendering.KnownLayer.Background);
 
         // Park the drag grips on the page edges. Skip this mid-drag: moving a Thumb under the cursor

@@ -34,6 +34,8 @@ public sealed class AppSettings
     /// <summary>When true, markdown syntax collapses on every line except the one being edited.</summary>
     public bool LiveMarkdown { get; set; } = true;
 
+    public LinkDisplayMode LinkDisplayMode { get; set; } = LinkDisplayMode.Nothing;
+
     /// <summary>Maximum text column width in pixels; wider windows just get bigger margins.</summary>
     public double ReadingWidth { get; set; } = 820;
 

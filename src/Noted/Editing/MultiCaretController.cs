@@ -6,185 +6,226 @@ using ICSharpCode.AvalonEdit.Rendering;
 
 namespace Noted.Editing;
 
-/// <summary>
-/// AvalonEdit only tracks one caret. This layers a second set of point carets on top: Alt+click adds
-/// one, typing/Backspace/Delete/Enter replay at every caret, and anything that isn't a plain edit
-/// (a selection, an unrelated document change, arrow-key navigation) drops back to a single caret.
-/// </summary>
+public readonly record struct CaretRange(int Offset, int Length) : ISegment
+{
+    public int End => Offset + Length;
+    public int EndOffset => End;
+}
+
+/// <summary>Secondary carets/selections, with their state recorded in the document's undo group.</summary>
 public sealed class MultiCaretController : IBackgroundRenderer
 {
     private readonly TextEditor _editor;
-    private readonly List<int> _offsets = [];
+    private readonly List<CaretRange> _secondary = [];
+    private TextDocument? _document;
     private bool _applying;
+    private string? _search;
+    private bool _wholeWord;
 
     public MultiCaretController(TextEditor editor)
     {
         _editor = editor;
-        _editor.Document.Changed += (_, _) =>
+        _document = editor.Document;
+        if (_document is not null) _document.Changed += DocumentChanged;
+        editor.DocumentChanged += (_, _) =>
         {
-            if (!_applying) Clear();
+            if (_document is not null) _document.Changed -= DocumentChanged;
+            _document = editor.Document;
+            if (_document is not null) _document.Changed += DocumentChanged;
+            Clear();
+        };
+        editor.TextArea.SelectionChanged += (_, _) =>
+        {
+            if (!_applying && _document is not null && _document.UndoStack.AcceptChanges && !_document.IsInUpdate) Clear();
         };
     }
 
+    private void DocumentChanged(object? sender, DocumentChangeEventArgs e)
+    {
+        if (!_applying && _document is not null && _document.UndoStack.AcceptChanges) Clear();
+    }
+
     public Brush CaretBrush { get; set; } = Brushes.White;
-
-    public bool HasSecondaryCarets => _offsets.Count > 0;
-
+    public bool HasSecondaryCarets => _secondary.Count > 0;
+    public IReadOnlyList<CaretRange> SecondaryRanges => _secondary;
+    public event Action? RangesChanged;
     public KnownLayer Layer => KnownLayer.Caret;
+    private CaretRange Primary => new(_editor.SelectionLength > 0 ? _editor.SelectionStart : _editor.CaretOffset, _editor.SelectionLength);
 
-    /// <summary>Adds a caret at <paramref name="offset"/>, or removes it if one is already there.</summary>
     public void ToggleCaretAt(int offset)
     {
-        if (offset == _editor.CaretOffset) return;
-
-        if (_offsets.Remove(offset))
+        if (_document is null || offset < 0 || offset > _document.TextLength || offset == _editor.CaretOffset) return;
+        _search = null;
+        int existing = _secondary.FindIndex(r => r.Offset == offset);
+        if (existing >= 0) _secondary.RemoveAt(existing);
+        else
         {
-            Redraw();
-            return;
+            var previous = new CaretRange(_editor.CaretOffset, 0);
+            _secondary.Add(previous);
+            SetPrimary(new(offset, 0));
         }
-
-        _offsets.Add(_editor.CaretOffset);
-        _offsets.Sort();
-        _editor.CaretOffset = offset;
         Redraw();
     }
+
+    /// <summary>First invocation selects the word at the caret; subsequent invocations add the
+    /// next occurrence, wrapping once and never selecting an occurrence twice.</summary>
+    public void SelectNextOccurrence()
+    {
+        if (_document is null) return;
+        string text = _document.Text;
+        var primary = Primary;
+        if (primary.Length == 0)
+        {
+            Clear();
+            int start = primary.Offset;
+            if (start == text.Length || (start < text.Length && !WordChar(text[start]))) start--;
+            if (start < 0 || !WordChar(text[start])) return;
+            int end = start + 1;
+            while (start > 0 && WordChar(text[start - 1])) start--;
+            while (end < text.Length && WordChar(text[end])) end++;
+            _search = text[start..end]; _wholeWord = true;
+            SetPrimary(new(start, end - start));
+            return;
+        }
+        if (_search is null || text.Substring(primary.Offset, primary.Length) != _search)
+        {
+            _secondary.Clear();
+            _search = text.Substring(primary.Offset, primary.Length);
+            _wholeWord = _search.All(WordChar) && WordBoundary(text, primary.Offset, primary.End);
+        }
+        var selected = _secondary.Append(primary).ToArray();
+        int next = Find(primary.End, text.Length);
+        if (next < 0) next = Find(0, primary.Offset);
+        if (next < 0) return;
+        _secondary.Add(primary);
+        SetPrimary(new(next, _search.Length));
+        _editor.ScrollToLine(_document.GetLineByOffset(next).LineNumber);
+        Redraw();
+
+        int Find(int from, int end)
+        {
+            while (from <= end - _search.Length)
+            {
+                int found = text.IndexOf(_search, from, end - from, StringComparison.Ordinal);
+                if (found < 0) return -1;
+                int stop = found + _search.Length;
+                if ((!_wholeWord || WordBoundary(text, found, stop)) &&
+                    !selected.Any(r => found < r.End && stop > r.Offset)) return found;
+                from = found + 1;
+            }
+            return -1;
+        }
+    }
+
+    private static bool WordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
+    private static bool WordBoundary(string text, int start, int end) =>
+        (start == 0 || !WordChar(text[start - 1])) && (end == text.Length || !WordChar(text[end]));
 
     public void Clear()
     {
-        if (_offsets.Count == 0) return;
-        _offsets.Clear();
-        Redraw();
+        _search = null;
+        if (_secondary.Count == 0) return;
+        _secondary.Clear(); Redraw();
     }
 
-    public bool HandleTextInput(string text)
+    public bool HandleTextInput(string text) => Apply(text, 0);
+    public bool HandleBackspace() => Apply("", -1);
+    public bool HandleDelete() => Apply("", 1);
+    public bool HandleEnter() => Apply(Environment.NewLine, 0);
+
+    private bool Apply(string replacement, int deleteDirection)
     {
-        if (!CanApply()) return false;
-        ApplyAtAllCarets((document, offset) =>
-        {
-            document.Insert(offset, text);
-            return offset + text.Length;
-        });
-        return true;
-    }
-
-    public bool HandleBackspace()
-    {
-        if (!CanApply()) return false;
-        ApplyAtAllCarets((document, offset) =>
-        {
-            if (offset == 0) return 0;
-            document.Remove(offset - 1, 1);
-            return offset - 1;
-        });
-        return true;
-    }
-
-    public bool HandleDelete()
-    {
-        if (!CanApply()) return false;
-        ApplyAtAllCarets((document, offset) =>
-        {
-            if (offset >= document.TextLength) return offset;
-            document.Remove(offset, 1);
-            return offset;
-        });
-        return true;
-    }
-
-    public bool HandleEnter()
-    {
-        if (!CanApply()) return false;
-        string newLine = Environment.NewLine;
-        ApplyAtAllCarets((document, offset) =>
-        {
-            document.Insert(offset, newLine);
-            return offset + newLine.Length;
-        });
-        return true;
-    }
-
-    /// <summary>A real selection makes per-caret replacement ambiguous for v1, so bail to a single caret.</summary>
-    private bool CanApply()
-    {
-        if (_offsets.Count == 0) return false;
-        if (_editor.TextArea.Selection.IsEmpty) return true;
-
-        Clear();
-        return false;
-    }
-
-    /// <summary>
-    /// Applies the same point edit at the primary caret and every secondary caret. Carets are edited
-    /// from the highest document offset down, so an edit never shifts an offset still waiting its turn.
-    /// Each edit's length delta is then applied back onto the carets already processed, since those
-    /// sit after the edit point and would otherwise drift by one character per keystroke.
-    /// </summary>
-    private void ApplyAtAllCarets(Func<TextDocument, int, int> edit)
-    {
-        var document = _editor.Document;
-        var all = new List<int>(_offsets) { _editor.CaretOffset };
-        int primaryIndex = all.Count - 1;
-        var newOffsets = new int[all.Count];
-
-        var order = Enumerable.Range(0, all.Count).OrderByDescending(i => all[i]);
+        if (_document is null || !HasSecondaryCarets || _editor.IsReadOnly) return false;
+        var before = Snapshot();
+        var ranges = _secondary.Append(Primary).ToArray();
+        var results = new CaretRange[ranges.Length];
         var processed = new List<int>();
-
         _applying = true;
+        var undo = _document.UndoStack;
+        undo.StartUndoGroup();
+        undo.PushOptional(new SelectionUndo(this, _document, before, onUndo: true));
         try
         {
-            using (document.RunUpdate())
+            using (_document.RunUpdate())
             {
-                foreach (int i in order)
+                foreach (int i in Enumerable.Range(0, ranges.Length).OrderByDescending(i => ranges[i].Offset))
                 {
-                    int lengthBefore = document.TextLength;
-                    newOffsets[i] = edit(document, all[i]);
-                    int delta = document.TextLength - lengthBefore;
-
-                    if (delta != 0)
+                    int start = ranges[i].Offset, length = ranges[i].Length;
+                    if (length == 0 && deleteDirection < 0 && start > 0)
                     {
-                        foreach (int done in processed) newOffsets[done] += delta;
+                        length = start >= 2 && ((_document.GetCharAt(start - 2) == '\r' && _document.GetCharAt(start - 1) == '\n') ||
+                            (char.IsHighSurrogate(_document.GetCharAt(start - 2)) && char.IsLowSurrogate(_document.GetCharAt(start - 1)))) ? 2 : 1;
+                        start -= length;
                     }
-
+                    else if (length == 0 && deleteDirection > 0 && start < _document.TextLength)
+                        length = start + 1 < _document.TextLength && ((_document.GetCharAt(start) == '\r' && _document.GetCharAt(start + 1) == '\n') ||
+                            (char.IsHighSurrogate(_document.GetCharAt(start)) && char.IsLowSurrogate(_document.GetCharAt(start + 1)))) ? 2 : 1;
+                    if (length > 0 || replacement.Length > 0) _document.Replace(start, length, replacement);
+                    int delta = replacement.Length - length;
+                    foreach (int done in processed) results[done] = results[done] with { Offset = results[done].Offset + delta };
+                    results[i] = new(start + replacement.Length, 0);
                     processed.Add(i);
                 }
             }
+            Restore(new(results[..^1], results[^1], null, false));
+            undo.PushOptional(new SelectionUndo(this, _document, Snapshot(), onUndo: false));
         }
-        finally
-        {
-            _applying = false;
-        }
-
-        _offsets.Clear();
-        for (int i = 0; i < primaryIndex; i++) _offsets.Add(newOffsets[i]);
-        _offsets.Sort();
-        _editor.CaretOffset = newOffsets[primaryIndex];
-        Redraw();
+        finally { undo.EndUndoGroup(); _applying = false; }
+        return true;
     }
 
-    private void Redraw() => _editor.TextArea.TextView.InvalidateLayer(Layer);
+    private sealed record State(CaretRange[] Secondary, CaretRange Primary, string? Search, bool WholeWord);
+    private State Snapshot() => new(_secondary.ToArray(), Primary, _search, _wholeWord);
+    private void Restore(State state)
+    {
+        bool previous = _applying; _applying = true;
+        try
+        {
+            _secondary.Clear(); _secondary.AddRange(state.Secondary.Distinct().Where(r => r != state.Primary));
+            _search = state.Search; _wholeWord = state.WholeWord;
+            SetPrimary(state.Primary); Redraw();
+        }
+        finally { _applying = previous; }
+    }
+    private void SetPrimary(CaretRange range)
+    {
+        bool previous = _applying; _applying = true;
+        try { _editor.Select(range.Offset, range.Length); }
+        finally { _applying = previous; }
+    }
+    private sealed class SelectionUndo(MultiCaretController owner, TextDocument document, State state, bool onUndo) : IUndoableOperation
+    {
+        public void Undo() { if (onUndo && owner._document == document) owner.Restore(state); }
+        public void Redo() { if (!onUndo && owner._document == document) owner.Restore(state); }
+    }
+    private void Redraw()
+    {
+        _editor.TextArea.TextView.InvalidateLayer(Layer);
+        RangesChanged?.Invoke();
+    }
+
+    public static Rect CaretBounds(TextView view, int offset)
+    {
+        var line = view.Document.GetLineByOffset(offset);
+        var visual = view.GetVisualLine(line.LineNumber);
+        if (visual is null) return Rect.Empty;
+        int column = visual.GetVisualColumn(offset - visual.FirstDocumentLine.Offset);
+        var top = visual.GetVisualPosition(column, VisualYPosition.TextTop) - view.ScrollOffset;
+        var bottom = visual.GetVisualPosition(column, VisualYPosition.TextBottom) - view.ScrollOffset;
+        return new Rect(top.X, top.Y, 1.4, Math.Max(1, bottom.Y - top.Y));
+    }
 
     public void Draw(TextView textView, DrawingContext drawingContext)
     {
-        if (_offsets.Count == 0 || textView.Document is null) return;
-
-        textView.EnsureVisualLines();
-        var pen = new Pen(CaretBrush, 1.4);
-        pen.Freeze();
-
-        foreach (int offset in _offsets)
+        if (!HasSecondaryCarets || textView.Document is null || !textView.VisualLinesValid) return;
+        foreach (var range in _secondary)
         {
-            if (offset < 0 || offset > textView.Document.TextLength) continue;
-
-            var line = textView.Document.GetLineByOffset(offset);
-            var visualLine = textView.GetVisualLine(line.LineNumber);
-            if (visualLine is null) continue;
-
-            int column = visualLine.GetVisualColumn(offset - line.Offset);
-            var position = visualLine.GetVisualPosition(column, VisualYPosition.LineTop);
-            double x = position.X - textView.ScrollOffset.X;
-            double top = position.Y - textView.ScrollOffset.Y;
-
-            drawingContext.DrawLine(pen, new Point(x, top), new Point(x, top + visualLine.Height));
+            if (range.Offset < 0 || range.End > textView.Document.TextLength) continue;
+            if (range.Length > 0)
+                foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, range))
+                    drawingContext.DrawRectangle(_editor.TextArea.SelectionBrush, null, rect);
+            var bounds = CaretBounds(textView, range.End);
+            if (!bounds.IsEmpty) drawingContext.DrawRectangle(CaretBrush, null, bounds);
         }
     }
 }

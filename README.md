@@ -56,12 +56,31 @@ Move the caret onto a line and its raw syntax appears. Move away and the markers
 
 Switch instantly with `Ctrl+Shift+L` or use the title-bar theme button.
 
+## Link display modes
+
+Choose **Settings → General → Links** to change how links appear in live Markdown:
+
+| Mode | Appearance |
+| --- | --- |
+| Nothing (default) | Ordinary text links, without fetching previews |
+| Icon | A website favicon or an icon for an image, video, audio file, document, or folder |
+| Mini preview | A compact card with a thumbnail on the left when available |
+| Preview | An embedded block with click-to-load playback or browsing inside the note |
+
+Works with bare web addresses, angle autolinks, Markdown links, and reference links. Relative file links resolve against the saved note's folder. Existing `![image](path)` embeds retain their image rendering. Links in rendered tables retain the table's existing presentation.
+
+Icons and thumbnails are fetched in the background from linked sites; website cards use page metadata and YouTube links use video thumbnails. Missing or unsupported previews fall back to type icons. Mini and full previews occupy their own rows at the left edge of the editor, even when a label precedes the link. Full previews load only when clicked and require the [Microsoft Edge WebView2 Runtime](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution). Websites, browser-supported media, and PDFs appear inside the note; other documents and folders can be opened in their default app using the card's context menu. Provider restrictions, sign-in requirements, and unsupported codecs can prevent playback; **Open link** remains available.
+
+Right-click a card and choose **Edit link**, or move the caret onto its line to edit the original Markdown. Switching modes never changes saved text. Turning off live Markdown shows the source.
+
 ## Keyboard shortcuts
 
 | Action | Shortcut |
 | --- | --- |
 | New / open / save note | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` |
 | Find / replace / go to line | `Ctrl+F` / `Ctrl+H` / `Ctrl+G` |
+| Select next matching word or selected text | `Ctrl+Shift+D` (repeat to add matches) |
+| Add / remove a caret | `Alt+click` |
 | Switch theme | `Ctrl+Shift+L` |
 | Toggle live Markdown | `Ctrl+Shift+P` |
 | Settings / settings folder | `Ctrl+,` / `Ctrl+Shift+,` |
@@ -69,6 +88,8 @@ Switch instantly with `Ctrl+Shift+L` or use the title-bar theme button.
 | Complete shortcut reference | `F1` |
 
 Press `F1` inside Noted to open the full keyboard reference as a rendered note.
+
+Typing replaces every selected match or inserts at every caret. Undo and redo restore all caret positions and selected ranges; press `Escape` to clear extra selections.
 
 ## Tech stack
 

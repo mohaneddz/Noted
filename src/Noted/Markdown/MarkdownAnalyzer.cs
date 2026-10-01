@@ -31,6 +31,13 @@ public sealed class MarkdownAnalyzer
     private Directive[] _directives = [];
     private bool[] _refDef = [];
     private HashSet<string> _refLabels = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _refDestinations = new(StringComparer.Ordinal);
+
+    public string? ResolveLinkReference(string label)
+    {
+        EnsureFresh();
+        return _refDestinations.GetValueOrDefault(MarkdownScanner.NormalizeReferenceLabel(label));
+    }
     private bool[] _abbrevDef = [];
     private HashSet<string> _abbrevTerms = new(StringComparer.Ordinal);
     private DefinitionRole[] _definitions = [];
@@ -247,6 +254,7 @@ public sealed class MarkdownAnalyzer
         _directives = new Directive[lineCount + 1];
         _refDef = new bool[lineCount + 1];
         _refLabels = new HashSet<string>(StringComparer.Ordinal);
+        _refDestinations.Clear();
         _abbrevDef = new bool[lineCount + 1];
         _abbrevTerms = new HashSet<string>(StringComparer.Ordinal);
         _definitions = new DefinitionRole[lineCount + 1];
@@ -367,7 +375,11 @@ public sealed class MarkdownAnalyzer
             if (MarkdownScanner.TryReadReferenceDefinition(TextOf(n), out string label))
             {
                 _refDef[n] = true;
-                _refLabels.Add(MarkdownScanner.NormalizeReferenceLabel(label));
+                string normalized = MarkdownScanner.NormalizeReferenceLabel(label);
+                _refLabels.Add(normalized);
+                string definition = TextOf(n);
+                int destinationStart = definition.IndexOf('[') + label.Length + 3;
+                _refDestinations.TryAdd(normalized, definition[destinationStart..].Trim());
             }
         }
 

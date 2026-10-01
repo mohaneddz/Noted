@@ -56,6 +56,8 @@ public static class ShortcutSheet
         ## Editing lines
 
         - `Ctrl+D` — duplicate line
+        - `Ctrl+Shift+D` — select the next occurrence (repeat to add more)
+        - `Alt+click` — add or remove a caret; `Escape` — clear extra carets
         - `Ctrl+Shift+K` — delete line
         - `Alt+Up` / `Alt+Down` — move line up / down
         - `Enter` on an empty list item — end the list
