@@ -1,4 +1,4 @@
-﻿namespace Noted.Infrastructure;
+namespace Noted.Infrastructure;
 
 /// <summary>
 /// The keyboard reference, written in markdown so Noted can render it with its own editor.
@@ -60,6 +60,8 @@ public static class ShortcutSheet
         - `Alt+click` — add or remove a caret; `Escape` — clear extra carets
         - `Ctrl+Shift+K` — delete line
         - `Alt+Up` / `Alt+Down` — move line up / down
+        - `Alt+Left` / `Alt+Right` ? go to the start / end of the line
+        - `Left` / `Right` with a selection ? go to its start / end
         - `Enter` on an empty list item — end the list
         - `Ctrl+Z` / `Ctrl+Y` — undo / redo
 
