@@ -56,6 +56,22 @@
           <File Source="..\publish\ICSharpCode.AvalonEdit.dll" KeyPath="yes" />
         </Component>
 
+        <Component Id="WebView2CoreDll" Guid="61CCFF84-6F34-4800-B292-3F869AF3BB31">
+          <File Source="..\publish\Microsoft.Web.WebView2.Core.dll" KeyPath="yes" />
+        </Component>
+
+        <Component Id="WebView2WinFormsDll" Guid="A1603B6B-651B-4948-93A1-1D3742E5DC86">
+          <File Source="..\publish\Microsoft.Web.WebView2.WinForms.dll" KeyPath="yes" />
+        </Component>
+
+        <Component Id="WebView2WpfDll" Guid="8411FD75-1127-4080-A8CB-52EBD70C69F6">
+          <File Source="..\publish\Microsoft.Web.WebView2.Wpf.dll" KeyPath="yes" />
+        </Component>
+
+        <Component Id="WebView2LoaderDll" Guid="73BF81D3-A0F7-41B1-8E96-42EA4C628CBF">
+          <File Source="..\publish\WebView2Loader.dll" KeyPath="yes" />
+        </Component>
+
         <Component Id="WpfMathDll" Guid="5A4BC87F-8DC0-4C37-81C7-A0AB2B438A7A">
           <File Source="..\publish\WpfMath.dll" KeyPath="yes" />
         </Component>
@@ -91,6 +107,10 @@
       <ComponentRef Id="DepsJson" />
       <ComponentRef Id="RuntimeConfigJson" />
       <ComponentRef Id="AvalonEditDll" />
+      <ComponentRef Id="WebView2CoreDll" />
+      <ComponentRef Id="WebView2WinFormsDll" />
+      <ComponentRef Id="WebView2WpfDll" />
+      <ComponentRef Id="WebView2LoaderDll" />
       <ComponentRef Id="WpfMathDll" />
       <ComponentRef Id="XamlMathSharedDll" />
       <ComponentRef Id="FileAssociations" />
