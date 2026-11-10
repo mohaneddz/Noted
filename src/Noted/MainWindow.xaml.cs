@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -734,6 +734,14 @@ public partial class MainWindow : Window
 
     private void OnEditorPreviewKeyDown(object? sender, KeyEventArgs e)
     {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (EditorNavigation.Handle(Editor, key, e.KeyboardDevice.Modifiers))
+        {
+            if (_multiCaret.HasSecondaryCarets) _multiCaret.Clear();
+            e.Handled = true;
+            return;
+        }
+
         if (_multiCaret.HasSecondaryCarets)
         {
             if (e.Key == Key.Escape)
