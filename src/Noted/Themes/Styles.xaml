@@ -19,7 +19,6 @@
 
     <FontFamily x:Key="Font.Ui">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="Font.Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
-    <sys:Double x:Key="Size.TitleBar">40</sys:Double>
 
     <!-- ===================== buttons ===================== -->
 
@@ -56,7 +55,9 @@
 
     <Style x:Key="CaptionButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
         <Setter Property="Width" Value="46" />
-        <Setter Property="Height" Value="{DynamicResource Size.TitleBar}" />
+        <!-- Fill the title bar row, which scales with the Spacing setting. -->
+        <Setter Property="Height" Value="NaN" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="FontSize" Value="10" />
         <Setter Property="Template">
             <Setter.Value>
