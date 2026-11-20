@@ -16,10 +16,11 @@
         TextOptions.TextFormattingMode="Ideal">
 
     <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="40"
+        <!-- Only strips the native frame; WindowFrame answers hit testing for the custom title bar. -->
+        <shell:WindowChrome CaptionHeight="0"
                             CornerRadius="0"
                             GlassFrameThickness="0"
-                            ResizeBorderThickness="6"
+                            ResizeBorderThickness="0"
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
 
@@ -35,8 +36,7 @@
             </Grid.RowDefinitions>
 
             <!-- ============ title bar / tab strip ============ -->
-            <Grid Grid.Row="0" x:Name="TitleBar" Background="{DynamicResource Brush.Surface}"
-                  MouseLeftButtonDown="OnTitleBarMouseLeftButtonDown">
+            <Grid Grid.Row="0" x:Name="TitleBar" Background="{DynamicResource Brush.Surface}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -54,9 +54,8 @@
 
                 <ScrollViewer x:Name="TabStripScroll" Grid.Column="1" VerticalScrollBarVisibility="Disabled"
                               HorizontalScrollBarVisibility="Auto"
-                              PreviewMouseWheel="OnTabStripPreviewMouseWheel"
-                              shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                    <StackPanel Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                              PreviewMouseWheel="OnTabStripPreviewMouseWheel">
+                    <StackPanel Orientation="Horizontal">
                         <ListBox x:Name="TabList"
                                  Background="Transparent" BorderThickness="0"
                                  ItemContainerStyle="{StaticResource TabItemStyle}"
@@ -96,15 +95,14 @@
                 </ScrollViewer>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
-                            Margin="8,0" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                            Margin="8,0">
                     <Button x:Name="ThemeButton" Style="{StaticResource IconButton}" Content="&#xE706;"
                             Click="OnToggleThemeClick" ToolTip="Toggle theme (Ctrl+Shift+L)" />
                     <Button x:Name="MenuButton" Style="{StaticResource IconButton}" Content="&#xE712;"
                             Click="OnMenuClick" ToolTip="Menu — shortcuts with F1" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="3" Orientation="Horizontal"
-                            shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <StackPanel Grid.Column="3" Orientation="Horizontal">
                     <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="OnMinimizeClick" />
                     <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Content="&#xE922;"
                             Click="OnMaximizeClick" />

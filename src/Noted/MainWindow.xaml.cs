@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     private bool _fullScreen;
     private WindowState _preFullScreenState = WindowState.Normal;
     private Rect _preFullScreenBounds;
+    private readonly WindowFrame _frame;
 
     private readonly record struct ClosedDocument(string? FilePath, string Text);
 
@@ -64,6 +65,7 @@ public partial class MainWindow : Window
         _settings = App.Current.Settings;
 
         InitializeComponent();
+        _frame = new WindowFrame(this, TitleBar, MaximizeButton, () => _fullScreen);
 
         _colorizer = new MarkdownColorizer(_analyzer, _reveal);
         _generator = new MarkdownElementGenerator(_analyzer, _reveal);
@@ -111,6 +113,13 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) => { UpdateReadingWidth(); Editor.Focus(); };
         StateChanged += (_, _) => UpdateMaximizeState();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        _frame.Attach();
+        UpdateMaximizeState();
     }
 
     // ================= setup =================
@@ -1357,44 +1366,6 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void OnTitleBarMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ChangedButton != MouseButton.Left || IsInteractiveTitleBarElement(e.OriginalSource as DependencyObject))
-            return;
-
-        e.Handled = true;
-        if (e.ClickCount == 2)
-        {
-            OnMaximizeClick(sender, e);
-            return;
-        }
-
-        // Hand the gesture back to Windows as a real caption drag. This preserves native snapping
-        // and correctly restores a maximized window when it is pulled away from the monitor edge.
-        ReleaseCapture();
-        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        SendMessage(handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
-    }
-
-    private static bool IsInteractiveTitleBarElement(DependencyObject? element)
-    {
-        while (element is not null)
-        {
-            if (element is System.Windows.Controls.Primitives.ButtonBase
-                or ListBoxItem
-                or System.Windows.Controls.Primitives.ScrollBar
-                or System.Windows.Controls.Primitives.Thumb)
-                return true;
-
-            if (ReferenceEquals(element, Application.Current.MainWindow)) break;
-            element = element is Visual or System.Windows.Media.Media3D.Visual3D
-                ? VisualTreeHelper.GetParent(element)
-                : LogicalTreeHelper.GetParent(element);
-        }
-
-        return false;
-    }
-
     private void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     private void OnMaximizeClick(object sender, RoutedEventArgs e) =>
@@ -1415,21 +1386,40 @@ public partial class MainWindow : Window
             return;
         }
 
-        RootBorder.Margin = maximized ? new Thickness(7) : new Thickness(0);
+        RootBorder.Margin = maximized ? GetMaximizedOverhang() : new Thickness(0);
         RootBorder.BorderThickness = maximized ? new Thickness(0) : new Thickness(1);
+    }
+
+    /// <summary>
+    /// A maximized window is sized past the work area by its (invisible) resize frame on every side, so the
+    /// content has to be inset by that much or the title bar and status bar end up partly off screen. The
+    /// overhang depends on DPI and the frame metrics, so measure it rather than assume a fixed number.
+    /// </summary>
+    private Thickness GetMaximizedOverhang()
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        var source = hwnd == IntPtr.Zero ? null : System.Windows.Interop.HwndSource.FromHwnd(hwnd);
+        var info = new MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFO>() };
+
+        if (source?.CompositionTarget is not { } target
+            || !GetWindowRect(hwnd, out var window)
+            || !GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), ref info))
+            return SystemParameters.WindowResizeBorderThickness;
+
+        var work = info.rcWork;
+        var topLeft = target.TransformFromDevice.Transform(
+            new Point(Math.Max(0, work.Left - window.Left), Math.Max(0, work.Top - window.Top)));
+        var bottomRight = target.TransformFromDevice.Transform(
+            new Point(Math.Max(0, window.Right - work.Right), Math.Max(0, window.Bottom - work.Bottom)));
+        return new Thickness(topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y);
     }
 
     // ---- Win32: the true monitor bounds, taskbar included ----
 
     private const uint MONITOR_DEFAULTTONEAREST = 2;
-    private const uint WM_NCLBUTTONDOWN = 0x00A1;
-    private const int HTCAPTION = 2;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool ReleaseCapture();
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern IntPtr SendMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct RECT { public int Left, Top, Right, Bottom; }
