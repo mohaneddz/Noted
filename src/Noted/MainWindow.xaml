@@ -6,7 +6,7 @@
         Title="Noted"
         Icon="Assets/Noted.ico"
         Height="760" Width="1120" MinHeight="360" MinWidth="520"
-        WindowStyle="None"
+        WindowStyle="SingleBorderWindow"
         AllowsTransparency="False"
         AllowDrop="True"
         Background="{DynamicResource Brush.Background}"
